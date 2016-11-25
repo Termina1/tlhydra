@@ -1,0 +1,5 @@
+package tlhydra
+
+opts = "-p lightyear"
+modules = TLHydra,
+          TLParser
