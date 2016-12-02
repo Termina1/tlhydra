@@ -133,43 +133,6 @@ parseMutlArgs = (do identsOpt <- sepBy1 (parseOpt parseVarIdent) spaces
                     typeTerm <- parseTerm
                     pure (ArgBraces identsOpt (isJust excl) typeTerm))
 
--- parseArg : Parser TLArg
--- parseArg = parseArgSimple <|>
---            parseArgBraces <|>
---            parseArgShort <|>
---            parseArgVector <?> "combinator argument"
---   where
---
---     parseArgSimple : Parser TLArg
---     parseArgSimple = (do identOpt <- (parseOpt parseVarIdent)
---                          token ":"
---                          cdef <- opt parseConditionalDef
---                          excl <- opt (token "!")
---                          typeTerm <- parseTerm
---                          pure (ArgSimple identOpt cdef (isJust excl) typeTerm)) <?> "simple argument"
---
---     parseArgVector : Parser TLArg
---     parseArgVector = (do identOpt <- opt ((parseOpt parseVarIdent) <* spaces <* token ":")
---                          spaces
---                          natTerm <- opt (parseTerm <* string "*")
---                          token "["
---                          spaces
---                          args <- sepBy parseArg spaces
---                          spaces
---                          token "]"
---                          pure (ArgVector identOpt natTerm args)) <?> "vector argument"
---
-    -- parseArgBraces : Parser TLArg
-    -- parseArgBraces = (do token "("
-    --                      arg <- parseMutlArgs
-    --                      token ")"
-    --                      pure arg) <?> "arguments with parens"
---
-    -- parseArgShort : Parser TLArg
-    -- parseArgShort = (do excl <- opt (token "!")
-    --                     typeTerm <- parseTerm
-    --                     pure (ArgShort (isJust excl) typeTerm)) <?> "short argument"
-
 parseArg : Parser TLArg
 parseArg = parseArgBraces <|>
            parseOtherArgs
