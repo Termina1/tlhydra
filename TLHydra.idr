@@ -1,12 +1,11 @@
-module TLHydra
+module Main
 import TLParser
+import TLParserTypes
 import Lightyear.Strings
 
-export
-data Schema = MkSchema
+%access public export
 
-export
-loadSchema : String -> Schema
+data Schema = MkSchema
 
 readFileUntilEnd : File -> String -> IO (Either FileError String)
 readFileUntilEnd file acc = do end <- fEOF file
@@ -25,13 +24,21 @@ readSchemeFile filename = do Right file <- openFile filename Read
                              pure (Right filestr)
 
 testText : String
-testText = "getUser#b0f732d5 test:int = User;\ngetUsers#2d84d5f5 res:%(Vector int) = Vector User;"
+testText = "getUsers#2d84d5f5 (Vector int) = Vector;"
+
+testIo : Show a => String -> Parser a -> IO ()
+testIo x p = do Right z <- pure (parse p x)
+                  | Left y => putStrLn y
+                putStrLn (show z)
 
 testSimple : String -> Either String TLProgram
 testSimple x = parse parseProgram x
--- test : IO ()
--- test = do Right result <- readSchemeFile "./example.tl"
---             | Left error => putStrLn (show error)
---           Right parseResult <- pure $ parse parseComments result
---             | Left error => putStrLn (show error)
---           putStrLn parseResult
+
+main : IO ()
+main = do Right result <- readSchemeFile "./example.tl"
+            | Left error => putStrLn (show error)
+          Right parseResult <- pure $ parse stripComments result
+            | Left error => putStrLn error
+          Right schemeTokens <- pure $ parse parseProgram parseResult
+            | Left error => putStrLn error
+          putStrLn "Done!"

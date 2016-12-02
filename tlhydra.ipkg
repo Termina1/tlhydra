@@ -2,4 +2,9 @@ package tlhydra
 
 opts = "-p lightyear"
 modules = TLHydra,
-          TLParser
+          TLParser,
+          TLParserTypes
+
+main = TLHydra
+
+executable = tlhydra
