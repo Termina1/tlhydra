@@ -119,13 +119,11 @@ Show TLBuiltIn where
   show (MkTLBuiltIn identifier type) = (show identifier) ++ " ? = " ++ (show type);
 
 data TLDeclaration = Combinator TLCombinator |
-                     Comment String |
                      BuiltInCombinator TLBuiltIn |
                      FinalDecl String TLIdentLcNs
 
 Show TLDeclaration where
     show (Combinator x) = (show x) ++ "\n"
-    show (Comment x) = "// " ++ (show x) ++ "\n"
     show (BuiltInCombinator x) = (show x) ++ "\n"
     show (FinalDecl y x) = y ++ " " ++ (show x) ++ "\n"
 
