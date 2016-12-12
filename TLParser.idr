@@ -29,7 +29,6 @@ stripComments : Parser String
 stripComments = do all <- map (foldl (++) []) (many stripCommentsHelper)
                    last <- many anyToken
                    pure (pack (all ++ last))
-                  --  pure (pack (filter (/= '\n') (all ++ last)))
   where
     stripCommentsHelper : Parser (List Char)
     stripCommentsHelper = do justStr <- manyTill anyToken (string "//")
