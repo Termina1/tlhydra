@@ -64,68 +64,24 @@ proveMagic str with (proveHexFixedStr (strList str))
                                      (No contra) => No (\ contra' => contra (proveHexFixedStrEqualLength contra'))
   proveMagic str | (No contra) = No (\ contra' => contra (rewrite (proveHexFixedStrEqualLength contra') in contra'))
 
-bitsToBytes : Bits 32 -> Vect 4 (Bits 8)
-bitsToBytes x = bitsToBytes' 4 x
+calculateMagic : TLCombinator -> Integer
+calculateMagic x = bitsToInt $ crc32 $ show x
+
+parseHex : hexFixedStr MagicLength str -> Integer
+parseHex x = parseHexFixedStr x
   where
-    bitsToBytes' : (n : Nat) -> Bits 32 -> Vect n (Bits 8)
-    bitsToBytes' Z x = []
-    bitsToBytes' (S k) bits = let prevBits = bitsToBytes' k bits in
-                              let shifted = shiftRightLogical bits (MkBits $ natToBits {n = nextBytes 32} k * 8) in
-                              let nextByte = truncate {m = 24} {n = 8} shifted in
-                                  nextByte :: prevBits
+    parseHexFixedStr : hexFixedStr n str -> Integer
+    parseHexFixedStr hexStrEmpty = 0
+    parseHexFixedStr (hexNext symbol prf y) = (cast (((ord symbol) - (ord '0')))) + (parseHexFixedStr y)
 
-upperBits : Bits 8 -> Fin 16
-upperBits bits = let result = shiftRightLogical (and bits (intToBits 240)) (intToBits 4) in
-                     restrict 15 (bitsToInt result)
-
-lowerBits : Bits 8 -> Fin 16
-lowerBits bits = let result = and bits (intToBits 15) in
-                     restrict 15 (bitsToInt result)
-
-finToHex : Fin 16 -> Char
-finToHex FZ = '0'
-finToHex (FS FZ) = '1'
-finToHex (FS (FS FZ)) = '2'
-finToHex (FS (FS (FS FZ))) = '3'
-finToHex (FS (FS (FS (FS FZ)))) = '4'
-finToHex (FS (FS (FS (FS (FS FZ))))) = '5'
-finToHex (FS (FS (FS (FS (FS (FS FZ)))))) = '6'
-finToHex (FS (FS (FS (FS (FS (FS (FS FZ))))))) = '7'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS FZ)))))))) = '8'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ))))))))) = '9'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ)))))))))) = 'A'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ))))))))))) = 'B'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ)))))))))))) = 'C'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ))))))))))))) = 'D'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ)))))))))))))) = 'E'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ))))))))))))))) = 'F'
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS FZ)))))))))))))))) impossible
-finToHex (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS (FS _))))))))))))))))) impossible
-
-byteToHexStr : Bits 8 -> String
-byteToHexStr bits =  let upper = finToHex $ upperBits bits in
-                     let lower = finToHex $ lowerBits bits in
-                         strCons upper (strCons lower "")
-
-convertBitsToStrHex : Bits 32 -> String
-convertBitsToStrHex bits = let bytes = bitsToBytes bits in
-                               foldl (\acc, byte => acc ++ (byteToHexStr byte)) "" bytes
-
-calculateMagic : TLCombinator -> Dec TLMagic
-calculateMagic x = let magic = convertBitsToStrHex $ crc32 (show x) in
-                   (case proveMagic magic of
-                         (Yes prf) => Yes (Element magic prf)
-                         (No contra) => No (\ contraVal => (case contraVal of
-                                                                 (Element x pf) => contra (believe_me pf))))
 export
-ensureMagic : TLCombinator -> Dec TLMagic
+ensureMagic : TLCombinator -> Either String Integer
 ensureMagic comb with (identifier comb)
   ensureMagic comb | (Opt param) with (param)
-    ensureMagic comb | (Opt param) | (IdentLcFull _) = calculateMagic comb
-    ensureMagic comb | (Opt param) | (IdentLcFullMagic _ magic) =
+    ensureMagic comb | (Opt param) | (IdentLcFull _) = Right $ calculateMagic comb
+    ensureMagic comb | (Opt param) | (IdentLcFullMagic lc magic) =
       case proveMagic magic of
-           (Yes prf) => Yes (Element magic prf)
-           (No contra) => No (\ contraVal => (case contraVal of
-                                                   (Element x pf) => contra (believe_me pf)))
+           (Yes prf) => Right (parseHex prf)
+           (No contra) => Left $ "The name of this combinator (" ++ (show lc) ++ ") is not correct"
 
-  ensureMagic comb | Ignore = calculateMagic comb
+  ensureMagic comb | Ignore = Right $ calculateMagic comb

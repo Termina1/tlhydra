@@ -5,54 +5,29 @@ import Data.Vect
 
 import TLParserTypes
 import TLMagic
-
-%access public export
-
-data TLArg : Type where
-
-data TLType : Type where
-
-record TLCombinator where
-  constructor MkTLCombinator
-  identifier : String
-  magic : TLMagic
-  optArgs : List TLStore.TLArg
-  args : List TLStore.TLArg
-  resultType : TLType
-
-data TLFinal : Type where
-
-record TLStore where
-  constructor MkTLStore
-  magicMapping : SortedMap String String
-  types : SortedMap String TLStore.TLCombinator
-  functions : SortedMap String TLStore.TLCombinator
-  finals : SortedMap String TLFinal
-
-%access private
+import TLStoreTypes
 
 maybeToString : Maybe String -> String
 maybeToString Nothing = ""
 maybeToString (Just x) = x ++ "."
 
-prepareArg : TLParserTypes.TLArg -> TLStore.TLArg
-prepareResultType : TLParserTypes.TLResultType -> TLStore.TLType
+prepareArg : TLParserTypes.TLArg -> TLStoreTypes.TLArg
+prepareResultType : TLParserTypes.TLResultType -> TLStoreTypes.TLType
 
 prepareIdentifier : TLParserTypes.TLOpt TLParserTypes.TLIdentLcFull -> String
 prepareIdentifier (Opt (IdentLcFull (MkTLIdentLcNs ns ident))) = (maybeToString ns) ++ ident
 prepareIdentifier (Opt (IdentLcFullMagic (MkTLIdentLcNs ns ident) magic)) = (maybeToString ns) ++ ident
 prepareIdentifier Ignore = "_"
 
-prepareTypeCombinator : TLParserTypes.TLCombinator -> Either String TLStore.TLCombinator
+prepareTypeCombinator : TLParserTypes.TLCombinator -> Either String TLStoreTypes.TLCombinator
 prepareTypeCombinator comb = let magic = ensureMagic comb in
                                 (case magic of
-                                      (Yes prf) =>  let identifier = prepareIdentifier (identifier comb) in
-                                                    let fixedArgs = map prepareArg (args comb) in
-                                                    let optArgs = map prepareArg (args comb) in
-                                                    let type = prepareResultType (resultType comb) in
-                                                        Right (TLStore.MkTLCombinator identifier prf optArgs fixedArgs type)
-                                      (No contra) => Left ("Magic for combinator " ++
-                                                          (prepareIdentifier (identifier comb)) ++ " is incorrect"))
+                                      (Right magic) =>  let identifier = prepareIdentifier (identifier comb) in
+                                                        let fixedArgs = map prepareArg (args comb) in
+                                                        let optArgs = map prepareArg (args comb) in
+                                                        let type = prepareResultType (resultType comb) in
+                                                            Right (TLStoreTypes.MkTLCombinator identifier magic optArgs fixedArgs type)
+                                      (Left err) => Left err)
 
 export
 convertAstToStore : TLProgram -> Either String TLStore
@@ -66,7 +41,7 @@ convertAstToStore (MkTLProgram blocks) = foldl foldDeclarationBlock (pure (MkTLS
              scomb <- prepareTypeCombinator comb
              foldDeclarationBlock (pure (record {
                types = (insert (identifier scomb) scomb (types sdata)),
-               magicMapping = (insert (getWitness (magic scomb)) (identifier scomb) (magicMapping sdata))
+               magicMapping = (insert (magic scomb) (identifier scomb) (magicMapping sdata))
              } sdata)) (TypeDeclarationBlock decls)
 
       foldDeclarationBlock store (TypeDeclarationBlock (decl :: decls)) | (BuiltInCombinator bultin) = foldDeclarationBlock store (TypeDeclarationBlock decls)
