@@ -72,7 +72,7 @@ mutual
                  (\t => parseSubExpr' (Just t) >!=
                  (\subex => (case subex of
                                   Nothing => pure (SubExprTerm t SubExprEmpty)
-                                  (Just x) => pure (SubExprTerm t x)))))
+                                  (Just x) => pure x))))
                 <|>
                 (parseNatConst >!= (\nat => spaces *> token "+" *> parseSubExpr >>=
                 (\sub1 => parseSubExpr' Nothing >>=
