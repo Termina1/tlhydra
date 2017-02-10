@@ -47,7 +47,7 @@ mutual
                                     Just (res1 + res2)
 
   evaluateExps : List TLSubExpr -> Maybe Nat
-  evaluateExps xs = foldl (\acc, sub => acc >>= \a => evaluateExp sub >>= \b => pure $ a + b) (Just 0) xs
+  evaluateExps xs = foldl (liftA2 (+)) (Just 0) (map evaluateExp xs)
 
 termToNatExpr : TLTerm -> Either String TLSNatExpr
 termToNatExpr (TermExpr xs) = case evaluateExps xs of
