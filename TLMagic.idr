@@ -64,8 +64,9 @@ proveMagic str with (proveHexFixedStr (strList str))
                                      (No contra) => No (\ contra' => contra (proveHexFixedStrEqualLength contra'))
   proveMagic str | (No contra) = No (\ contra' => contra (rewrite (proveHexFixedStrEqualLength contra') in contra'))
 
-calculateMagic : TLCombinator -> Integer
-calculateMagic x = bitsToInt $ crc32 $ show x
+export
+calculateMagic : Show a => a -> Integer
+calculateMagic x = bitsToInt $ crc32 $ (show x)
 
 parseHex : hexFixedStr MagicLength str -> Integer
 parseHex x = parseHexFixedStr x
