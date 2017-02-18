@@ -103,7 +103,7 @@ mutual
     where
       parseBoxedParams : Parser (List TLExpr)
       parseBoxedParams = do token "<"
-                            args <- commitTo (some (sepBy1 parseSubExpr spaces))
+                            args <- commitTo (sepBy1 (sepBy1 parseSubExpr spaces) comma)
                             token ">"
                             pure args
 

@@ -63,7 +63,8 @@ getNextXor crc y = case bitsToInt (and crc g4) of
                         12 => g0xg1
                         13 => g0xg1xg3
                         14 => g0xg1xg2
-                        15 => g0xg1xg2xg3
+                        _ => g0xg1xg2xg3 -- this is certainly 16, but I can't prove it without Fin
+                                         -- which is inefficient, would be cool to do it
 
 export
 crc32 : String -> Bits 32

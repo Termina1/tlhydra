@@ -7,7 +7,7 @@ data TLOpt : Type -> Type where
    Ignore : TLOpt a
 
 Show a => Show (TLOpt a) where
-    show (Opt param) = "Opt " ++ (show param)
+    show (Opt param) = show param
     show Ignore = "_"
 
 record TLIdentLcNs where
@@ -16,8 +16,8 @@ record TLIdentLcNs where
   ident : String
 
 Show TLIdentLcNs where
-    show (MkTLIdentLcNs Nothing ident) = "IdentNs " ++ ident
-    show (MkTLIdentLcNs (Just x) ident) = "IdentNs " ++ x ++ "." ++ ident
+    show (MkTLIdentLcNs Nothing ident) = ident
+    show (MkTLIdentLcNs (Just x) ident) = x ++ "." ++ ident
 
 data TLTypeIdent = TypeIdentBoxed TLIdentLcNs |
                    TypeIdentLc TLIdentLcNs |

@@ -1,6 +1,6 @@
 package tlhydra
 
-opts = "-p lightyear -p contrib"
+opts = "-p lightyear -p contrib -p effects"
 modules = TLHydra,
           TLParser,
           TLParserTypes
