@@ -1,29 +1,18 @@
 module TLStore
 
+import Effects
+import Effect.State
+import Effect.Exception
+import TLMagic
+
 import Data.SortedMap
 import Data.Vect
 
 import TLParserTypes
-import TLMagic
 import TLStoreTypes
 
-NAT_ERROR : String
-NAT_ERROR = "only var name or nat expressions are allowed"
-
-joinS : List String -> String
-joinS xs = foldl (\acc, el => acc ++ " " ++ el) "" xs
-
-maybeToString : Maybe String -> String
-maybeToString Nothing = ""
-maybeToString (Just x) = x ++ "."
-
-prepareIdentNs : TLIdentLcNs -> String
-prepareIdentNs (MkTLIdentLcNs ns ident) = (maybeToString ns) ++ ident
-
-prepareIdentifier : TLOpt TLIdentLcFull -> String
-prepareIdentifier (Opt (IdentLcFull ident)) = prepareIdentNs ident
-prepareIdentifier (Opt (IdentLcFullMagic ident magic)) = prepareIdentNs ident
-prepareIdentifier Ignore = "_"
+natType : TLSTypeExpr
+natType = TLSTypeExprExpr "#" []
 
 mutual
   evaluateTerm : TLTerm -> Maybe Nat
@@ -49,92 +38,109 @@ mutual
   evaluateExps : List TLSubExpr -> Maybe Nat
   evaluateExps xs = foldl (liftA2 (+)) (Just 0) (map evaluateExp xs)
 
-termToNatExpr : TLTerm -> Either String TLSNatExpr
-termToNatExpr (TermExpr xs) = case evaluateExps xs of
-                                   Nothing => Left $ joinS ["Not a nat expression", (show xs), NAT_ERROR]
-                                   (Just x) => Right (TLNatExprConst x)
-termToNatExpr (TermTypeIdent x) = Left $ joinS ["Invalid type idnetifier,", (show x) , NAT_ERROR]
-termToNatExpr (TermVarIdent name) = Right (TLNatExprVar name)
-termToNatExpr (TermNatConst k) = Right (TLNatExprConst k)
-termToNatExpr (TermTerm x) = Left $ joinS ["Invalid term", (show x), NAT_ERROR]
-termToNatExpr (TermTypeWithExpr x xs) = Left $ joinS ["Invalid type", (show x), NAT_ERROR]
+prepareBuiltinForMagic : String -> String -> String
+prepareBuiltinForMagic name type = name ++ " ? = " ++ type
 
-termToType : TLTerm -> Bool -> Either String TLSType
--- termToType (TermExpr xs) excl = ?termToType_rhs_1
--- termToType (TermTypeIdent x) excl = ?termToType_rhs_2
--- termToType (TermVarIdent x) excl = ?termToType_rhs_3
--- termToType (TermNatConst k) excl = ?termToType_rhs_4
--- termToType (TermTerm x) excl = ?termToType_rhs_5
--- termToType (TermTypeWithExpr x xs) excl = ?termToType_rhs_6
+createBuiltin : TLIdentLcFull -> TLIdentLcNs -> TLSType
+createBuiltin constName typeName = let tname = show typeName in
+                                   let cname = show constName in
+                                   let magic = calculateMagic (prepareBuiltinForMagic cname tname) in
+                                   let const = MkTLCombinator cname magic Nil Nil in
+                                   let typeExpr = TLSTypeExprExpr tname Nil in
+                                   MkTLSType tname typeExpr (insert tname const empty)
 
-mutual
-  argTermToType : Maybe TLTerm -> List TLArg -> Either String TLSType
-  argTermToType mult args with (mult)
-    argTermToType mult args | Nothing = (prepareArgs args) >>= \args => Right $ TLSTypeArray TLSMultiplicityInfer args
-    argTermToType mult args | (Just term) = do mult' <- (termToNatExpr term)
-                                               args' <- (prepareArgs args)
-                                               Right $ TLSTypeArray (TLSMultiplicityExpr mult') args'
+insertType : String -> TLSType -> TLStore -> TLStore
+insertType name type store = record { types = (insert name type (types store)) } store
 
-  prepareArg : TLArg -> Either String (List TLSArg)
-  prepareArg (ArgSimple id y excl type) = (termToType type excl)
-                                          >>= \type => Right $ pure $ MkTLSArg (Just $ show id) type
-  prepareArg (ArgVector id mult args) = (argTermToType mult args)
-                                        >>= \type => Right $ pure $ MkTLSArg (map show id) type
-  prepareArg (ArgBraces names excl term) = foldl convertArg (Right []) names
-    where
-      convertArg : Either String (List TLSArg) -> TLOpt String -> Either String (List TLSArg)
-      convertArg acc id = do arr <- acc
-                             type <- termToType term excl
-                             Right $ [MkTLSArg (Just (show id)) type] ++ arr
+parseBuiltin : TLBuiltIn -> Eff () [(STATE TLStore), EXCEPTION String]
+parseBuiltin (MkTLBuiltIn (Opt param) type) = do state <- get
+                                                 (case lookup (show type) (types state) of
+                                                       Nothing => do update (insertType (show type) (createBuiltin param type))
+                                                                     pure ()
+                                                       (Just x) => raise ("Duplicate builtin declaration: " ++ (show type)))
 
-  prepareArg (ArgShort excl term) = (termToType term excl)
-                                    >>= \type => Right $ pure $ MkTLSArg Nothing type
+parseBuiltin (MkTLBuiltIn Ignore type) = raise "Can't use _ as a builtin combinator name"
 
-  prepareArgs : List TLArg -> Either String (List TLSArg)
-  prepareArgs args = foldl foldOnArgs (Right []) args
-    where
-      foldOnArgs : Either String (List TLSArg) -> TLArg -> Either String (List TLSArg)
-      foldOnArgs acc arg = do arr <- acc
-                              nwargs <- prepareArg arg
-                              Right (arr ++ nwargs)
+selectVarById : String -> List TLSArg -> Maybe TLSArg
+selectVarById x xs = find (\el => (case TLSArg.id el of
+                                        Nothing => False
+                                        (Just x') => x' == x )) xs
 
-prepareResultType : TLResultType -> TLSType
-prepareResultType (ResultType ident xs) = ?prepareResultType_rhs_1
-prepareResultType (ResultTypeParam x xs) = ?prepareResultType_rhs_2
+assertVarType : TLSTypeExpr -> List TLSArg -> String -> Eff () [EXCEPTION String]
+assertVarType typeExpr args varId with (selectVarById varId args)
+  assertVarType typeExpr args varId | Nothing = raise $ "Not found var " ++ varId ++ " previously declared"
+  assertVarType typeExpr args varId | (Just (MkTLSArg x condition type)) = 
+    case type == typeExpr of
+      False => raise $ "var " ++ varId ++ "should be of type Nat to be used in conditons"
+      True => pure ()
 
-prepareTypeCombinator : TLCombinator -> Either String TLSCombinator
-prepareTypeCombinator comb = let magic = ensureMagic comb in
-                                (case magic of
-                                      (Right magic) =>  let identifier = prepareIdentifier (identifier comb) in
-                                                        let fixedArgs = prepareArgs (args comb) in
-                                                        let optArgs = prepareArgs (optArgs comb) in
-                                                        let type = prepareResultType (resultType comb) in
-                                                            ?hole
-                                                            -- Right (TLStoreTypes.MkTLCombinator identifier magic optArgs fixedArgs type)
-                                      (Left err) => Left err)
+parseConditional : Maybe TLConditionalDef -> List TLSArg -> Eff (Maybe TLCondition) [EXCEPTION String]
+parseConditional cond args = case cond of
+                                  Nothing => pure Nothing
+                                  (Just (MkTLConditionalDef ident nat)) => do assertVarType natType args ident
+                                                                              (case nat of
+                                                                                Nothing => pure $ Just $ TLConditionVar ident
+                                                                                (Just x) => pure $ Just $ TLConditionVarBit ident x)
 
-export
-convertAstToStore : TLProgram -> Either String TLStore
-convertAstToStore (MkTLProgram blocks) = foldl foldDeclarationBlock (pure (MkTLStore empty empty empty empty)) blocks
+parseSimpleTermToType : TLTerm -> Maybe TLSTypeExpr
+parseSimpleTermToType (TermExpr xs) = ?parseSimpleTermToType_rhs_1
+parseSimpleTermToType (TermTypeIdent (TypeIdentBoxed x)) = Just $ TLSTypeExprBoxed (TLSTypeExprExpr (show x) [])
+parseSimpleTermToType (TermTypeIdent (TypeIdentLc x)) = Just $ TLSTypeExprExpr (show x) []
+parseSimpleTermToType (TermTypeIdent TypeIdentHash) = Just natType
+parseSimpleTermToType (TermVarIdent x) = pure $ TLSTypeExprVar x
+parseSimpleTermToType (TermNatConst k) = Nothing
+parseSimpleTermToType (TermTerm x) = map TLSTypeExprUnboxed (parseSimpleTermToType x)
+parseSimpleTermToType (TermTypeWithExpr x xs) = ?parseSimpleTermToType_rhs_6
+
+parseTermToType : Bool -> TLTerm -> List TLSArg -> Eff TLSTypeExpr [(STATE TLStore), EXCEPTION String]
+parseTermToType True _ _ = raise "Types with '!' are not supported"
+parseTermToType False term args = ?hole--parseSimpleTermToType term
+
+parseArg : TLArg -> List TLSArg -> Eff TLSArg [EXCEPTION String]
+parseArg (ArgSimple x cond z w) acc = do tlcond <- parseConditional cond acc
+                                         ?hole
+parseArg (ArgVector x y xs) acc = ?parseArgs_rhs_2
+parseArg (ArgBraces xs x y) acc = ?parseArgs_rhs_3
+parseArg (ArgShort x y) acc = ?parseArgs_rhs_4
+
+parseArgs : List TLArg -> Eff (List TLSArg) [EXCEPTION String]
+parseArgs args = parseArgsHelper args []
   where
-    foldDeclarationBlock : Either String TLStore -> TLDeclarationBlock -> Either String TLStore
-    foldDeclarationBlock store (TypeDeclarationBlock []) = store
-    foldDeclarationBlock store (TypeDeclarationBlock (decl :: decls)) with (decl)
-      foldDeclarationBlock store (TypeDeclarationBlock (decl :: decls)) | (Combinator comb)
-        = do sdata <- store
-             scomb <- prepareTypeCombinator comb
-             foldDeclarationBlock (pure (record {
-               types = (insert (identifier scomb) scomb (types sdata)),
-               magicMapping = (insert (magic scomb) (identifier scomb) (magicMapping sdata))
-             } sdata)) (TypeDeclarationBlock decls)
+    parseArgsHelper : List TLArg -> List TLSArg -> Eff (List TLSArg) [EXCEPTION String]
+    parseArgsHelper [] done = pure done
+    parseArgsHelper (x :: xs) done = do tlarg <- parseArg x done
+                                        parseArgsHelper xs (tlarg :: done)
 
-      foldDeclarationBlock store (TypeDeclarationBlock (decl :: decls)) | (BuiltInCombinator bultin) = foldDeclarationBlock store (TypeDeclarationBlock decls)
-      foldDeclarationBlock store (TypeDeclarationBlock (decl :: decls)) | (FinalDecl x y) = ?foldDeclarationBlock_rhs_4_rhs_4
 
-    foldDeclarationBlock store (FunctionDeclarationBlock []) = store
-    foldDeclarationBlock store (FunctionDeclarationBlock (decl :: decls)) with (decl)
-      foldDeclarationBlock store (FunctionDeclarationBlock (decl :: decls)) | (Combinator comb) = ?foldDeclarationBlock_rhs_5_rhs_1
-      foldDeclarationBlock store (FunctionDeclarationBlock (decl :: decls)) | (BuiltInCombinator bultin)
-        = Left "Built-in combinators are not allowed in 'functions' section"
-      foldDeclarationBlock store (FunctionDeclarationBlock (decl :: decls)) | (FinalDecl x y)
-        = Left "Final declarations are not allowed in 'functions' section"
+
+-- TODO: Result type can be type var only for function section
+assertResultType : TLSection -> Eff () [(STATE TLStore), EXCEPTION String]
+assertResultType section = pure ()
+
+parseCombinator : TLCombinator -> TLSection -> Eff () [(STATE TLStore), EXCEPTION String]
+parseCombinator (MkTLCombinator identifier optArgs args resultType) section =
+  do assertResultType section
+     tlArgs <- parseArgs args
+     ?hole
+
+parseType : TLDeclaration -> Eff () [(STATE TLStore), EXCEPTION String]
+parseType (Combinator x) = ?hole1
+parseType (BuiltInCombinator builtin) = parseBuiltin builtin
+parseType (FinalDecl x y) = ?hole2
+
+parseTypes : List TLDeclaration -> Eff () [(STATE TLStore), EXCEPTION String]
+parseTypes [] = pure ()
+parseTypes (decl :: decls) = do parseType decl
+                                parseTypes decls
+
+
+validateAstAndConvertToStore' : TLProgram -> Eff TLStore [(STATE TLStore), EXCEPTION String]
+validateAstAndConvertToStore' (MkTLProgram []) = ?validateAstAndConvertToStore'_rhs
+validateAstAndConvertToStore' (MkTLProgram (block :: blocks)) = case block of
+                                                                     (TypeDeclarationBlock xs) => do parseTypes xs
+                                                                                                     t <- get
+                                                                                                     pure t
+                                                                     (FunctionDeclarationBlock xs) => ?validateAstAndConvertToStore'_rhs_2
+
+validateAstAndConvertToStore : TLProgram -> Either String TLStore
+validateAstAndConvertToStore x = runInit [(MkTLStore empty empty empty), default] (validateAstAndConvertToStore' x)
