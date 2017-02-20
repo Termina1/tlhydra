@@ -82,15 +82,42 @@ parseConditional cond args = case cond of
                                                                                 Nothing => pure $ Just $ TLConditionVar ident
                                                                                 (Just x) => pure $ Just $ TLConditionVarBit ident x)
 
+parseSubExprToIdent : TLSubExpr -> Maybe TLSExpr
+-- parseSubExprToIdent (SubExprTerm (TermExpr xs) expr) = ?parseSubExprToIdent_rhs_2
+-- parseSubExprToIdent (SubExprTerm (TermTypeIdent x) expr) = ?parseSubExprToIdent_rhs_3
+-- parseSubExprToIdent (SubExprTerm (TermVarIdent x) expr) = ?parseSubExprToIdent_rhs_4
+-- parseSubExprToIdent (SubExprTerm (TermNatConst k) expr) = do nat <- evaluateExp expr
+--                                                              pure $ TLExpNat $ TLNatExprConst (k + nat)
+-- parseSubExprToIdent (SubExprTerm (TermTerm x) expr) = ?parseSubExprToIdent_rhs_6
+-- parseSubExprToIdent (SubExprTerm (TermTypeWithExpr x xs) expr) = ?parseSubExprToIdent_rhs_7
+
+-- parseSubExprToIdent SubExprEmpty = Nothing
+-- parseSubExprToIdent (SubExprSum k expr) = do nat <- evaluateExp expr
+--                                              pure $ TLExpNat $ TLNatExprConst (k + nat)
+
+-- parseSubExprToIdent (SubExprSeq x y) = Nothing
+
+parseExprToType : List TLSubExpr -> Maybe TLSExpr
+parseExprToType xs = let results = parseSubExprToIdent in
+                         ?hole
+
 parseSimpleTermToType : TLTerm -> Maybe TLSTypeExpr
-parseSimpleTermToType (TermExpr xs) = ?parseSimpleTermToType_rhs_1
+parseSimpleTermToType (TermExpr xs) = parseExprToType xs >>= \t =>
+                                        case t of
+                                           (TLExpNat x) => Nothing
+                                           (TLExpType x) => pure x
 parseSimpleTermToType (TermTypeIdent (TypeIdentBoxed x)) = Just $ TLSTypeExprBoxed (TLSTypeExprExpr (show x) [])
 parseSimpleTermToType (TermTypeIdent (TypeIdentLc x)) = Just $ TLSTypeExprExpr (show x) []
 parseSimpleTermToType (TermTypeIdent TypeIdentHash) = Just natType
 parseSimpleTermToType (TermVarIdent x) = pure $ TLSTypeExprVar x
 parseSimpleTermToType (TermNatConst k) = Nothing
 parseSimpleTermToType (TermTerm x) = map TLSTypeExprUnboxed (parseSimpleTermToType x)
-parseSimpleTermToType (TermTypeWithExpr x xs) = ?parseSimpleTermToType_rhs_6
+parseSimpleTermToType (TermTypeWithExpr (TypeIdentBoxed x) xs) = ?parseSimpleTermToType_rhs_2
+parseSimpleTermToType (TermTypeWithExpr (TypeIdentLc x) xs) = let children = map parseExprToType xs in
+                                                              let childrenPure = foldr (liftA2 (::)) (Just []) children in
+                                                                  childrenPure >>= \children => pure $ TLSTypeExprExpr (show x) children
+
+parseSimpleTermToType (TermTypeWithExpr TypeIdentHash xs) = Nothing
 
 parseTermToType : Bool -> TLTerm -> List TLSArg -> Eff TLSTypeExpr [(STATE TLStore), EXCEPTION String]
 parseTermToType True _ _ = raise "Types with '!' are not supported"
