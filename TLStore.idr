@@ -11,8 +11,22 @@ import Data.Vect
 import TLParserTypes
 import TLStoreTypes
 
+%access public export
+
 natType : TLSTypeExpr
 natType = TLSTypeExprExpr "#" []
+
+typeType : TLSTypeExpr
+typeType = TLSTypeExprExpr "Type" []
+
+data Args : Type where
+data Store : Type where
+
+ArgEffect : Type -> Type
+ArgEffect ret = Effects.SimpleEff.Eff ret [Args ::: (STATE (List TLSArg)), EXCEPTION String]
+
+ArgFullEffect : Type -> Type
+ArgFullEffect ret = Effects.SimpleEff.Eff ret [Args ::: (STATE (List TLSArg)), Store ::: (STATE TLStore), EXCEPTION String]
 
 mutual
   evaluateTerm : TLTerm -> Maybe Nat
@@ -61,94 +75,144 @@ parseBuiltin (MkTLBuiltIn (Opt param) type) = do state <- get
 
 parseBuiltin (MkTLBuiltIn Ignore type) = raise "Can't use _ as a builtin combinator name"
 
-selectVarById : String -> List TLSArg -> Maybe TLSArg
-selectVarById x xs = find (\el => (case TLSArg.id el of
-                                        Nothing => False
-                                        (Just x') => x' == x )) xs
+selectVarById : String -> Eff (Maybe TLSArg) [Args ::: (STATE (List TLSArg))]
+selectVarById x = do xs <- Args :- get
+                     pure $ find (\el => (case TLSArg.id el of
+                                               Nothing => False
+                                               (Just x') => x' == x)) xs
 
-assertVarType : TLSTypeExpr -> List TLSArg -> String -> Eff () [EXCEPTION String]
-assertVarType typeExpr args varId with (selectVarById varId args)
-  assertVarType typeExpr args varId | Nothing = raise $ "Not found var " ++ varId ++ " previously declared"
-  assertVarType typeExpr args varId | (Just (MkTLSArg x condition type)) = 
-    case type == typeExpr of
-      False => raise $ "var " ++ varId ++ "should be of type Nat to be used in conditons"
-      True => pure ()
+assertVarTypes : List TLSTypeExpr -> String -> ArgEffect ()
+assertVarTypes typeExprs varId =
+  do Just (MkTLSArg id condition type) <- selectVarById varId
+       | Nothing => raise ("Not found var " ++ varId ++ " previously declared")
+     assertVarTypesHelper typeExprs type
+  where
+    assertVarTypesHelper : List TLSTypeExpr -> TLSTypeExpr -> ArgEffect ()
+    assertVarTypesHelper [] type = raise ("var " ++ varId ++ " should be of type Nat to be used in conditons")
+    assertVarTypesHelper (x :: types) type =
+      (case type == x of
+            False => assertVarTypesHelper types type
+            True => pure ())
 
-parseConditional : Maybe TLConditionalDef -> List TLSArg -> Eff (Maybe TLCondition) [EXCEPTION String]
+assertVarType : TLSTypeExpr -> String -> ArgEffect ()
+assertVarType type varId = assertVarTypes [type] varId
+
+parseConditional : Maybe TLConditionalDef -> List TLSArg -> ArgEffect (Maybe TLCondition)
 parseConditional cond args = case cond of
                                   Nothing => pure Nothing
-                                  (Just (MkTLConditionalDef ident nat)) => do assertVarType natType args ident
+                                  (Just (MkTLConditionalDef ident nat)) => do assertVarType natType ident
                                                                               (case nat of
                                                                                 Nothing => pure $ Just $ TLConditionVar ident
                                                                                 (Just x) => pure $ Just $ TLConditionVarBit ident x)
 
-parseSubExprToIdent : TLSubExpr -> Maybe TLSExpr
--- parseSubExprToIdent (SubExprTerm (TermExpr xs) expr) = ?parseSubExprToIdent_rhs_2
--- parseSubExprToIdent (SubExprTerm (TermTypeIdent x) expr) = ?parseSubExprToIdent_rhs_3
--- parseSubExprToIdent (SubExprTerm (TermVarIdent x) expr) = ?parseSubExprToIdent_rhs_4
--- parseSubExprToIdent (SubExprTerm (TermNatConst k) expr) = do nat <- evaluateExp expr
---                                                              pure $ TLExpNat $ TLNatExprConst (k + nat)
--- parseSubExprToIdent (SubExprTerm (TermTerm x) expr) = ?parseSubExprToIdent_rhs_6
--- parseSubExprToIdent (SubExprTerm (TermTypeWithExpr x xs) expr) = ?parseSubExprToIdent_rhs_7
+constructTypeExpr : List TLSExpr -> String -> ArgFullEffect TLSTypeExpr
+constructTypeExpr children name = pure $ TLSTypeExprExpr name children
 
--- parseSubExprToIdent SubExprEmpty = Nothing
--- parseSubExprToIdent (SubExprSum k expr) = do nat <- evaluateExp expr
---                                              pure $ TLExpNat $ TLNatExprConst (k + nat)
+parseTypeIdentToType : TLTypeIdent -> (String -> ArgFullEffect TLSTypeExpr) -> ArgFullEffect TLSTypeExpr
+parseTypeIdentToType (TypeIdentBoxed x) fn = pure $ TLSTypeExprBoxed !(fn (show x))
+parseTypeIdentToType (TypeIdentLc x) fn = fn (show x)
+parseTypeIdentToType TypeIdentHash fn = pure natType -- TODO: think what errors this may cause
 
--- parseSubExprToIdent (SubExprSeq x y) = Nothing
+chooseVar : String -> ArgFullEffect (Maybe TLSArg)
+chooseVar x = do Just var <- selectVarById x
+                   | Nothing => pure Nothing
+                 assertVarTypes [typeType, natType] x
+                 pure (Just var)
 
-parseExprToType : List TLSubExpr -> Maybe TLSExpr
-parseExprToType xs = let results = parseSubExprToIdent in
-                         ?hole
 
-parseSimpleTermToType : TLTerm -> Maybe TLSTypeExpr
-parseSimpleTermToType (TermExpr xs) = parseExprToType xs >>= \t =>
-                                        case t of
-                                           (TLExpNat x) => Nothing
-                                           (TLExpType x) => pure x
-parseSimpleTermToType (TermTypeIdent (TypeIdentBoxed x)) = Just $ TLSTypeExprBoxed (TLSTypeExprExpr (show x) [])
-parseSimpleTermToType (TermTypeIdent (TypeIdentLc x)) = Just $ TLSTypeExprExpr (show x) []
-parseSimpleTermToType (TermTypeIdent TypeIdentHash) = Just natType
-parseSimpleTermToType (TermVarIdent x) = pure $ TLSTypeExprVar x
-parseSimpleTermToType (TermNatConst k) = Nothing
-parseSimpleTermToType (TermTerm x) = map TLSTypeExprUnboxed (parseSimpleTermToType x)
-parseSimpleTermToType (TermTypeWithExpr (TypeIdentBoxed x) xs) = ?parseSimpleTermToType_rhs_2
-parseSimpleTermToType (TermTypeWithExpr (TypeIdentLc x) xs) = let children = map parseExprToType xs in
-                                                              let childrenPure = foldr (liftA2 (::)) (Just []) children in
-                                                                  childrenPure >>= \children => pure $ TLSTypeExprExpr (show x) children
+chooseConstructor : String -> ArgFullEffect (Maybe TLSCombinator)
+chooseConstructor x = pure Nothing -- TODO: lookup type or constructor
 
-parseSimpleTermToType (TermTypeWithExpr TypeIdentHash xs) = Nothing
+chooseVarOrConstructor : String -> ArgFullEffect TLSTypeExpr
+chooseVarOrConstructor x = do Just var <- chooseVar x
+                                | Nothing => do Just constr <- chooseConstructor x
+                                                  | Nothing => raise ((show x) ++ " is neither var, nor constructor")
+                                                pure $ TLSTypeExprExpr x []
+                              pure $ TLSTypeExprVar x
 
-parseTermToType : Bool -> TLTerm -> List TLSArg -> Eff TLSTypeExpr [(STATE TLStore), EXCEPTION String]
-parseTermToType True _ _ = raise "Types with '!' are not supported"
-parseTermToType False term args = ?hole--parseSimpleTermToType term
 
-parseArg : TLArg -> List TLSArg -> Eff TLSArg [EXCEPTION String]
-parseArg (ArgSimple x cond z w) acc = do tlcond <- parseConditional cond acc
-                                         ?hole
-parseArg (ArgVector x y xs) acc = ?parseArgs_rhs_2
-parseArg (ArgBraces xs x y) acc = ?parseArgs_rhs_3
-parseArg (ArgShort x y) acc = ?parseArgs_rhs_4
 
-parseArgs : List TLArg -> Eff (List TLSArg) [EXCEPTION String]
-parseArgs args = parseArgsHelper args []
+mutual
+  pareSubExprToTypeIdent : TLSubExpr -> Eff TLTypeIdent [EXCEPTION String]
+  pareSubExprToTypeIdent (SubExprTerm term SubExprEmpty) with (term)
+    pareSubExprToTypeIdent (SubExprTerm term SubExprEmpty) | (TermTypeIdent x) = pure x
+    pareSubExprToTypeIdent (SubExprTerm term SubExprEmpty) | (TermTerm x) = pareSubExprToTypeIdent (SubExprTerm x SubExprEmpty)
+    pareSubExprToTypeIdent (SubExprTerm term SubExprEmpty) | x = raise $ (show x) ++ " is not a type identifier"
+  pareSubExprToTypeIdent x = raise $ (show x) ++ " is not a type identifier"
+
+  parseSubExprToType : TLSubExpr -> ArgFullEffect TLSExpr
+  parseSubExprToType (SubExprTerm x SubExprEmpty) = parseTermToTypeSecond x
+
+  parseSubExprToType (SubExprSum k x) = case evaluateExp x of
+                                             Nothing => raise $ (show x) ++ " is not a nat expression"
+                                             (Just x) => pure $ TLExpNat (k + x)
+  parseSubExprToType x = raise $ (show x) ++ ": something went wrong or empty subexression"
+
+  parseTypeChildern : TLTypeIdent -> List TLSubExpr -> ArgFullEffect TLSTypeExpr
+  parseTypeChildern ident xs = do children <- mapE (\sub => parseSubExprToType sub) xs
+                                  -- TODO: assert that types of children match some constructors
+                                  parseTypeIdentToType ident (constructTypeExpr children)
+
+  parseSimpleTermToType : TLTerm -> ArgFullEffect TLSTypeExpr
+  parseSimpleTermToType (TermExpr xs) with (xs)
+    parseSimpleTermToType (TermExpr xs) | [] = raise "Empty expression"
+    parseSimpleTermToType (TermExpr xs) | (x :: ys) = do ident <- pareSubExprToTypeIdent x
+                                                         parseTypeChildern ident ys
+
+  parseSimpleTermToType (TermTypeIdent typeIdent) = parseTypeIdentToType typeIdent (constructTypeExpr [])
+  parseSimpleTermToType (TermVarIdent x) = do assertVarType typeType x
+                                              pure $ TLSTypeExprVar x
+  parseSimpleTermToType (TermNatConst k) = raise "Type cannot be a nat const"
+  parseSimpleTermToType (TermTerm term) = pure $ TLSTypeExprUnboxed !(parseSimpleTermToType term)
+  parseSimpleTermToType (TermTypeWithExpr x xs) = ?hole
+
+  parseTermToTypeSecond : TLTerm -> ArgFullEffect TLSExpr
+  parseTermToTypeSecond (TermTypeIdent typeIdent) = do type <- parseTypeIdentToType typeIdent chooseVarOrConstructor
+                                                       pure $ TLExpType type
+
+  parseTermToTypeSecond (TermVarIdent x) = do assertVarTypes [typeType, natType] x
+                                              pure $ TLExpType $ TLSTypeExprVar x
+  parseTermToTypeSecond (TermNatConst k) = pure $ TLExpNat k
+  parseTermToTypeSecond term = do type <- parseSimpleTermToType term
+                                  pure $ TLExpType type
+
+parseTermToType : Bool -> TLTerm -> ArgFullEffect TLSTypeExpr
+parseTermToType True _ = raise "Types with '!' are not supported"
+parseTermToType False term = ?hole32323--parseSimpleTermToType term
+
+parseArg : TLArg -> ArgFullEffect TLSArg
+parseArg (ArgSimple x cond z term) = do tlcond <- parseConditional cond !(Args :- get)
+                                        type <- parseTermToType z term
+                                        ?holerer
+
+parseArg (ArgVector x y xs) = ?parseArgs_rhs_2
+parseArg (ArgBraces xs x y) = ?parseArgs_rhs_3
+parseArg (ArgShort x y) = ?parseArgs_rhs_4
+
+parseArgs : List TLArg -> Eff (List TLSArg) [(STATE TLStore), EXCEPTION String]
+parseArgs args = case parseArgsHelper args !get of
+                      (Left l) => raise l
+                      (Right r) => pure r
   where
-    parseArgsHelper : List TLArg -> List TLSArg -> Eff (List TLSArg) [EXCEPTION String]
-    parseArgsHelper [] done = pure done
-    parseArgsHelper (x :: xs) done = do tlarg <- parseArg x done
-                                        parseArgsHelper xs (tlarg :: done)
+    parseArgsEffectHelper : List TLArg -> ArgFullEffect (List TLSArg)
+    parseArgsEffectHelper [] = Args :- get
+    parseArgsEffectHelper (x :: xs) = do arg <- parseArg x
+                                         Args :- update (\store => arg :: store)
+                                         parseArgsEffectHelper xs
 
-
+    parseArgsHelper : List TLArg -> TLStore -> Either String (List TLSArg)
+    parseArgsHelper xs store = runInit [default, Store := store, default] (parseArgsEffectHelper xs)
 
 -- TODO: Result type can be type var only for function section
 assertResultType : TLSection -> Eff () [(STATE TLStore), EXCEPTION String]
-assertResultType section = pure ()
+assertResultType x = ?assertResultType_rhs
+
 
 parseCombinator : TLCombinator -> TLSection -> Eff () [(STATE TLStore), EXCEPTION String]
 parseCombinator (MkTLCombinator identifier optArgs args resultType) section =
   do assertResultType section
      tlArgs <- parseArgs args
-     ?hole
+     ?hole43434
 
 parseType : TLDeclaration -> Eff () [(STATE TLStore), EXCEPTION String]
 parseType (Combinator x) = ?hole1

@@ -1,7 +1,13 @@
 module Main
 import TLParser
 import TLParserTypes
+import TLStore
+import TLStoreTypes
 import Lightyear.Strings
+import Effects
+import Data.SortedMap
+import Effect.State
+import Effect.Exception
 
 %access public export
 
@@ -33,6 +39,12 @@ testIo x p = do Right z <- pure (parse p x)
 
 testSimple : String -> Either String TLProgram
 testSimple x = parse parseProgram x
+
+initArg : TLSArg
+initArg = (MkTLSArg (Just "X") Nothing typeType)
+
+testTerm : String -> Either String TLSTypeExpr
+testTerm str = parse parseTerm str >>= \term => (runInit [Args := [initArg], Store := (MkTLStore empty empty empty), default] (parseSimpleTermToType term))
 
 main : IO ()
 main = do Right result <- readSchemeFile "./example.tl"

@@ -12,7 +12,7 @@ data TLSection = TLSectionTypes | TLSectionFuncs
 data TLCondition = TLConditionVar String | TLConditionVarBit String Nat
 
 mutual
-  data TLSExpr = TLExpNat TLSNatExpr | TLExpType TLSTypeExpr
+  data TLSExpr = TLExpNat Nat | TLExpType TLSTypeExpr
 
   record TLSArg where
     constructor MkTLSArg
