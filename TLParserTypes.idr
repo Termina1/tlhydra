@@ -59,13 +59,11 @@ mutual
     show (TermTypeWithExpr ident xs) = (show ident) ++ "<" ++ (show xs) ++ ">"
 
 data TLResultType = ResultType TLIdentLcNs (List TLSubExpr) |
-                    ResultTypeParam TLIdentLcNs (List TLSubExpr) |
-                    ResultTypeStub
+                    ResultTypeParam TLIdentLcNs (List TLSubExpr)
 
 Show TLResultType where
     show (ResultType x xs) = (show x) ++ " " ++ (show xs)
     show (ResultTypeParam x xs) = (show x) ++ "<" ++ (show xs) ++ ">"
-    show (ResultTypeStub) = ""
 
 data TLIdentLcFull = IdentLcFull TLIdentLcNs |
                      IdentLcFullMagic TLIdentLcNs String

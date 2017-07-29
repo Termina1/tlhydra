@@ -1,8 +1,8 @@
 module Main
 import TLParser
 import TLParserTypes
-import TLStore
-import TLStoreTypes
+-- import TLStore
+-- import TLStoreTypes
 import Lightyear.Strings
 import Effects
 import Data.SortedMap
@@ -30,7 +30,11 @@ readSchemeFile filename = do Right file <- openFile filename Read
                              pure (Right filestr)
 
 testText : String
-testText = "getUsers#2d84d5f5 (Vector int) = Vector;"
+testText = "int ? = Int;\nlong ? = Long;\ndouble ? = Double;\nstring ? = String;\nvector {t:Type} test:int = Vector t;"
+
+-- testProgram : String -> Either String TLProgram
+-- testProgram str = parse parseProgram str
+--                   >>= \program => validateAstAndConvertToStore program
 
 testIo : Show a => String -> Parser a -> IO ()
 testIo x p = do Right z <- pure (parse p x)
@@ -39,12 +43,12 @@ testIo x p = do Right z <- pure (parse p x)
 
 testSimple : String -> Either String TLProgram
 testSimple x = parse parseProgram x
+--
+-- initArg : TLSArg
+-- initArg = (MkTLSArg (Just "X") Nothing typeType)
 
-initArg : TLSArg
-initArg = (MkTLSArg (Just "X") Nothing typeType)
-
-testTerm : String -> Either String TLSTypeExpr
-testTerm str = parse parseTerm str >>= \term => (runInit [Args := [initArg], Store := (MkTLStore empty empty empty), default] (parseSimpleTermToType term))
+-- testTerm : String -> Either String TLSTypeExpr
+-- testTerm str = parse parseTerm str >>= \term => (runInit [Args := [initArg], Store := (MkTLStore empty empty empty), default] (parseSimpleTermToType term))
 
 main : IO ()
 main = do Right result <- readSchemeFile "./example.tl"

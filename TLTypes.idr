@@ -1,4 +1,4 @@
-module TLStoreTypes
+module TLTypes
 
 import TLMagic
 import Data.SortedMap
@@ -29,25 +29,25 @@ mutual
     TLSTypeExprUnboxed : (type : TLSTypeExpr) -> TLSTypeExpr
 
 record TLSCombinator where
-  constructor MkTLCombinator
+  constructor MkTLSCombinator
   identifier : String
   magic : Integer
   optArgs : List TLSArg
   args : List TLSArg
+  type : TLSTypeExpr
 
 data TLSFinal : Type where
 
 record TLSType where
   constructor MkTLSType
   id : String
-  type : TLSTypeExpr
   constructors : SortedMap String TLSCombinator
-
-record TLStore where
-  constructor MkTLStore
-  types : SortedMap String TLSType
-  functionConstructors : SortedMap String TLSCombinator
-  finals : SortedMap String TLSFinal
+--
+-- record TLStore where
+--   constructor MkTLStore
+--   types : SortedMap String TLSType
+--   functionConstructors : SortedMap String TLSCombinator
+--   finals : SortedMap String TLSFinal
 
 Eq TLSNatExpr where
     (==) (TLNatExprConst k) (TLNatExprConst j) = k == j
