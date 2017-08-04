@@ -143,6 +143,11 @@ Show TLProgram where
     show (MkTLProgram blocks) = (show blocks)
 
 mutual
+  parseFullExpression : RuleWeek TLExpressionLang
+  parseFullExpression = do exprs <- many parseExpression
+                           pure $ TLEExpression exprs
+
+
   parseExpression' : Rule TLExpressionLang
   parseExpression' = do expect $ TLTokenChar '+'
                         nat <- natConst
@@ -162,9 +167,9 @@ mutual
   parseTerm : Rule TLExpressionLang
   parseTerm = do expect $ TLTokenChar '('
                  commit
-                 terms <- many parseExpression
+                 expr <- parseFullExpression
                  expect $ TLTokenChar ')'
-                 pure $ TLEExpression terms
+                 pure expr
           <|> do expect $ TLTokenChar '%'
                  commit
                  term <- parseTerm
@@ -172,10 +177,16 @@ mutual
           <|> do expect $ TLTokenChar '#'
                  commit
                  pure TLEHash
-          <|> do name <- typeName
-                 pure $ TLEIdent name
+          -- <|> do name <- typeName
+          --        pure $ TLEIdent name
           <|> do nat <- natConst
                  pure $ TLENat nat
+          <|> do name <- typeName
+                 expect $ TLTokenChar '<'
+                 commit
+                 exprs <- sepBy1 (expectUnit $ TLTokenChar ',') ((some parseExpression) >>= \expr => pure $ TLEExpression expr)
+                 expect $ TLTokenChar '>'
+                 pure $ TLEExpression exprs
 
 
 

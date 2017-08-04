@@ -34,6 +34,9 @@ data TLToken =
 Rule : Type -> Type
 Rule ty = Grammar (TokenData TLToken) True ty
 
+RuleWeek : Type -> Type
+RuleWeek ty = Grammar (TokenData TLToken) False ty
+
 data TLCName : Type where
   TLCNameFull : (name : TLName) -> (magic : String) -> TLCName
   TLCNameShort : (name : TLName) -> TLCName
@@ -87,3 +90,6 @@ compare _ _ = Nothing
 
 expect : TLToken -> Rule String
 expect token = terminald (\next => compare token next)
+
+expectUnit : TLToken -> Rule ()
+expectUnit token = terminald (\next => compare token next) >>= (\s => pure ())
