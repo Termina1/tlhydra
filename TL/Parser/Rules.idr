@@ -177,8 +177,6 @@ mutual
           <|> do expect $ TLTokenChar '#'
                  commit
                  pure TLEHash
-          -- <|> do name <- typeName
-          --        pure $ TLEIdent name
           <|> do nat <- natConst
                  pure $ TLENat nat
           <|> do name <- typeName
@@ -187,6 +185,9 @@ mutual
                  exprs <- sepBy1 (expectUnit $ TLTokenChar ',') ((some parseExpression) >>= \expr => pure $ TLEExpression expr)
                  expect $ TLTokenChar '>'
                  pure $ TLEExpression exprs
+
+          <|> do name <- typeName
+                 pure $ TLEIdent name
 
 
 
