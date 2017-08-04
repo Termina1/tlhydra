@@ -3,7 +3,9 @@ package tlhydra
 opts = "-p lightyear -p contrib -p effects"
 modules = TLHydra,
           TLParser,
-          TLParserTypes
+          TLParserTypes,
+          TL.Parser.Rules,
+          TL.Parser.Tokenizer
 
 main = TLHydra
 
