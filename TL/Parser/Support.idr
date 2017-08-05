@@ -63,13 +63,30 @@ data TLCName : Type where
   TLCNameShort : (name : TLName) -> TLCName
   TLCNameEmpty : TLCName
 
+Show TLCName where
+  show (TLCNameFull name magic) = (show name) ++ "#" ++ magic
+  show (TLCNameShort name) = (show name)
+  show TLCNameEmpty = "_"
+
 data TLVarName : Type where
   MkTLVarName : (name : TLName) -> TLVarName
   MkTLVarOpt : TLVarName
 
+Show TLVarName where
+  show (MkTLVarName name) = show name
+  show MkTLVarOpt = "_"
+
 data TLOperator = TLBareOperator | TLBangOperator | TLPlus
 
+Show TLOperator where
+  show TLBareOperator = "%"
+  show TLBangOperator = "!"
+  show TLPlus = "+"
+
 data TLFinalId = TLEmpty | TLFinal | TLNew
+
+glueList : Show a => List a -> String
+glueList xs = foldl (\acc, t => acc ++ t) "" (intersperse " " (map show xs))
 
 mutual
   TLECond : Type
@@ -88,6 +105,42 @@ mutual
     TLEOperator TLOperator TLExpressionLang |
     TLEExpression (List TLExpressionLang) |
     TLEMultiArg TLExpressionLang (List TLEArg)
+
+  Show TLEArg where
+    show (MkTLEArg name type) = (show name) ++ ":" ++ (show type)
+    show (MkTLEOptArg name type) = "{" ++ (show name) ++ ":" ++ (show type) ++ "}"
+    show (MkTLEArgCond name (a, b) type) = (show name) ++ ":" ++ a ++ "." ++ (show b) ++ "?" ++ (show type)
+
+  Show TLExpressionLang where
+    show (TLENat k) = show k
+    show (TLEIdent x) = show x
+    show TLEHash = "#"
+    show TLEEmpty = ""
+    show (TLEOperator x y) = (show x) ++ " " ++ (show y)
+    show (TLEExpression xs) = glueList xs
+    show (TLEMultiArg TLEEmpty xs) = "[" ++ (glueList xs) ++ "]"
+    show (TLEMultiArg x xs) = (show x) ++ "*[" ++ (glueList xs) ++ "]"
+
+record TLCombinator where
+  constructor MkTLCombinator
+  identifier : TLCName
+  args : List TLEArg
+  resultType : TLExpressionLang
+
+Show TLCombinator where
+  show (MkTLCombinator identifier args resultType)
+    = (show identifier) ++ " " ++ (glueList args) ++ " = " ++ (show resultType)
+
+data TLDeclaration = Combinator TLCombinator |
+                     BuiltInCombinator TLCombinator |
+                     FinalDecl TLFinalId TLName
+
+data TLDeclarationBlock = TypeDeclarationBlock (List TLDeclaration)
+                          | FunctionDeclarationBlock (List TLDeclaration)
+
+record TLProgram where
+  constructor MkTLProgram
+  blocks : List TLDeclarationBlock
 
 terminald : (TLToken -> Maybe a) -> Grammar (TokenData TLToken) True a
 terminald f = terminal (\token => (case token of

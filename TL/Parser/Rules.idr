@@ -1,27 +1,10 @@
-module Main
+module TL.Parser.Rules
 
 import Text.Parser
 import Text.Lexer
 
 import TL.Parser.Tokenizer
 import TL.Parser.Support
-
-record TLCombinator where
-  constructor MkTLCombinator
-  identifier : TLCName
-  args : List TLEArg
-  resultType : TLExpressionLang
-
-data TLDeclaration = Combinator TLCombinator |
-                     BuiltInCombinator TLCombinator |
-                     FinalDecl TLFinalId TLName
-
-data TLDeclarationBlock = TypeDeclarationBlock (List TLDeclaration)
-                          | FunctionDeclarationBlock (List TLDeclaration)
-
-record TLProgram where
-  constructor MkTLProgram
-  blocks : List TLDeclarationBlock
 
 mutual
   parseFullExpression : RuleWeek TLExpressionLang
@@ -109,8 +92,8 @@ mutual
   parseShortArg = do type <- parseTypTermWithBang
                      pure $ [MkTLEArg MkTLVarOpt type]
 
-  parseMultuplicityArg : Rule (List TLEArg)
-  parseMultuplicityArg = do name <- optional (do name <- varName
+  parseMultyplicityArg : Rule (List TLEArg)
+  parseMultyplicityArg = do name <- optional (do name <- varName
                                                  expect $ TLTokenChar ':'
                                                  pure name)
                             mult <- optional (do term <- parseTerm
@@ -118,7 +101,7 @@ mutual
                                                  pure term)
                             expect $ TLTokenChar '['
                             commit
-                            args <- many parseArg
+                            args <- assert_total (many parseArg)
                             expect $ TLTokenChar ']'
                             pure $ createMultiArg name mult (join args)
                          where
@@ -137,7 +120,7 @@ mutual
                     pure $ map (\name => MkTLEArg name type) names
 
   parseArg : Rule (List TLEArg)
-  parseArg = parseMultuplicityArg <|> -- order matters again
+  parseArg = parseMultyplicityArg <|> -- order matters again
              parseSimpleArg <|>
              parseListArg <|>
              parseShortArg
@@ -200,3 +183,11 @@ parseProgram : Rule TLProgram
 parseProgram = do decls <- many parseTLDeclaration
                   blocks <- some parseBlock
                   pure $ MkTLProgram $ (TypeDeclarationBlock decls) :: blocks
+
+export
+parseTL : String -> Either (ParseError (TokenData TLToken)) TLProgram
+parseTL x = case parse (tlLex x) parseProgram of
+                 (Left error) => Left error
+                 (Right (program, left)) => if (length left) == 0
+                                               then Right program
+                                               else Left (Error "Not all tokens parsed!" left)
