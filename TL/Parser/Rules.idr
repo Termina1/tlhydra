@@ -48,7 +48,7 @@ mutual
                  commit
                  exprs <- sepBy1 (expectUnit $ TLTokenChar ',') ((some parseExpression) >>= \expr => pure $ TLEExpression expr)
                  expect $ TLTokenChar '>'
-                 pure $ TLEExpression exprs
+                 pure $ TLEExpression [TLEIdent name, TLEExpression exprs]
           -- order matters, may be it could be fixed with rethinking grammar
           <|> do name <- typeName
                  pure $ TLEIdent name
