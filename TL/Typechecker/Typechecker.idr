@@ -263,9 +263,9 @@ checkCombinator comb = do section <- Section :- get
                           VarRefs :- put 0
                           cargs <- mapE (\arg => checkArg arg) (args comb)
                           (case section of
-                                Types => do typeRef <- checkResultType (resultType comb)
+                                Types => do typeRef <- checkResultType (expressionReduce (resultType comb))
                                             insertConstructor $ MkTLSConstructor (show (identifier comb)) 0 cargs typeRef
-                                Functions => do type <- checkTypeExpression (resultType comb)
+                                Functions => do type <- checkTypeExpression (expressionReduce (resultType comb))
                                                 insertFunction $ MkTLSFunction (show (identifier comb)) 0 cargs type)
 
 checkDeclaration : TLDeclaration -> TTEff ()

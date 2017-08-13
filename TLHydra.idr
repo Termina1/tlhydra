@@ -9,7 +9,7 @@ import TL.Parser.Support
 
 evaluateProgram : String -> Either String TLStore
 evaluateProgram str with (parseTL str)
-  evaluateProgram str | (Left (Error x xs)) = Left x
+  evaluateProgram str | (Left (Error x xs)) = Left $ x ++ (show xs)
   evaluateProgram str | (Right tlProgram) with (runTypechecker tlProgram)
     evaluateProgram str | (Right tlProgram) | (Left err) = Left err
     evaluateProgram str | (Right tlProgram) | (Right store) = pure store

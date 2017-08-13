@@ -181,8 +181,8 @@ parseBlock = do expect TLTokenTripleMinus
                 pure $ declBlockFromToken token decls
 
 parseProgram : Rule TLProgram
-parseProgram = do decls <- many parseTLDeclaration
-                  blocks <- some parseBlock
+parseProgram = do decls <- some parseTLDeclaration
+                  blocks <- many parseBlock
                   pure $ MkTLProgram $ (TypeDeclarationBlock decls) :: blocks
 
 export
