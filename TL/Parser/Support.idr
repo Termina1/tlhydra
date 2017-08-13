@@ -2,23 +2,9 @@ module TL.Parser.Support
 
 import Text.Parser
 import Text.Lexer
+import TL.Types
 
 %access public export
-
-data TLNameType = TLNameTypeLC | TLNameTypeUC
-
-Eq TLNameType where
-  (==) TLNameTypeLC TLNameTypeLC = True
-  (==) TLNameTypeUC TLNameTypeUC = True
-  (==) _ _ = False
-
-data TLName : Type where
-  MkTLName : (name : String) -> (type : TLNameType) -> TLName
-  MkTLNameNs : (ns : String) -> (name : String) -> (type : TLNameType) -> TLName
-
-Show TLName where
-  show (MkTLName name type) = name
-  show (MkTLNameNs ns name type) = ns ++ "." ++ name
 
 data TLToken =
   TLTokenComment String |

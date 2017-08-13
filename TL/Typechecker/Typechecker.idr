@@ -2,6 +2,7 @@ module TL.Typechecker.Typechecker
 
 import TL.Types
 import TL.Parser.Support
+import Data.Vect
 
 import Effects
 import Effect.State
@@ -12,34 +13,104 @@ import TL.Store.Store
 data Args : Type where
 data Store : Type where
 data Section : Type where
-
-data TLCStore : Type where
-
-
-TLStore TLCStore where
-  test = id
+data VarRefs : Type where
 
 TEff : Type -> Type
 TEff ret = Effects.SimpleEff.Eff ret [
-  Store ::: STATE TLCStore,
+  Store ::: STATE TLStore,
   Args ::: STATE (List TLSArg),
   Section ::: STATE TLSection,
   EXCEPTION String
 ]
 
+TTEff : Type -> Type
+TTEff ret = Effects.SimpleEff.Eff ret [
+  Store ::: STATE TLStore,
+  Args ::: STATE (List TLSArg),
+  Section ::: STATE TLSection,
+  EXCEPTION String,
+  VarRefs ::: STATE Int
+]
+
+generateRef : TTEff VarRef
+
+nameToVar : List TLSArg -> TLName -> Maybe TLSArg
+nameToVar [] x = Nothing
+nameToVar (y :: xs) x = if (argId y) == (show x) then Just y else nameToVar xs x
+
+varToRef : TLSArg -> VarRef
+varToRef (MkTLSArg id var_num type) = var_num
+varToRef (MkTLSArgCond id var_num cond type) = var_num
+
+insertVar : TLSArg -> TEff TLSArg
+insertConstructor : TLSConstructor -> TEff ()
+insertFunction : TLSFunction -> TEff ()
+assertVarNotExist : TLVarName -> TEff ()
+checkCond : TLECond -> TEff Conditional
+checkResultType : TLExpressionLang -> TEff TypeRef
+assertCombinatorName : TLCName -> TEff ()
+
+checkTypeEquivalence : TLSTypeExpr -> TLSTypeExpr -> Bool
+checkTypeEquivalence a b = a == b
+
 assertSection : TLSection -> TEff ()
-convertTypeIdentToRef : String -> TEff TypeRef
+assertSection x = if !(Section :- get) == x
+                     then pure ()
+                     else raise $ "Now is not a section " ++ (show x)
+
+convertTypeIdentToRef : TLName -> TEff (Maybe TypeRef)
+convertTypeIdentToRef name = pure $ storeNameToType name !(Store :- get)
+
+unifyParamAndExpr : TLTypeParam -> TLSExpr -> Bool
+unifyParamAndExpr TLParamNat (MKTLSExprNat natExpr) = True
+unifyParamAndExpr TLParamType (MkTLSExprType type) = checkTypeEquivalence type TLTypeType
+unifyParamAndExpr _ _ = False
+
+unifyParamsAndExpression : List TLTypeParam -> List TLSExpr -> Bool
+unifyParamsAndExpression [] [] = True
+unifyParamsAndExpression [] (x :: xs) = False
+unifyParamsAndExpression (x :: xs) [] = False
+unifyParamsAndExpression (x :: xs) (y :: ys) = if (unifyParamAndExpr x y)
+                                                  then unifyParamsAndExpression xs ys
+                                                  else False
+
 assertTypeParams : TypeRef -> List TLSExpr -> TEff ()
+assertTypeParams x xs = let type = storeGetType x !(Store :- get) in
+                        if (unifyParamsAndExpression (getTypeParams type) xs)
+                           then pure ()
+                           else raise "TypeError: cant unify types and expression"
 
-checkExpression : TLExpressionLang -> TEff TLSExpr
-checkTypeIdent : TLExpressionLang -> TEff TypeRef
-checkArgs : TLEArg -> TEff TLSArg
 checkVarWithType : TLName -> TLSTypeExpr -> TEff VarRef
+checkVarWithType name expr = case nameToVar !(Args :- get) name of
+                                  Nothing => raise $ "Arg " ++ (show name) ++ " not found"
+                                  (Just var@(MkTLSArg id var_num type)) => if checkTypeEquivalence type expr
+                                                                           then pure $ varToRef var
+                                                                           else raise "Var of an unexpected type"
+                                  (Just (MkTLSArgCond id var_num cond type)) => raise "Can't depend on conditional var"
 
-checkIdent : String -> TEff TLSTypeExpr
--- check if this var or type
--- if var then check its nat or type and convert to VarRef
--- if type check assertTypeParams and convert to TypeRef
+checkArgType : TLSArg -> List TLSTypeExpr -> TEff ()
+checkArgType var xs = let type = argType var in
+                          if any (checkTypeEquivalence type) xs
+                             then pure ()
+                             else raise $ "Var " ++ (argId var) ++ " is of an unexpected type"
+
+checkType : TLName -> List TLSExpr -> TEff TLSTypeExpr
+checkType name params = case !(convertTypeIdentToRef name) of
+                      Nothing => raise $ "Unexpected name: " ++ (show name)
+                      (Just ref) => do assertTypeParams ref params
+                                       pure $ MkTLSTypeExpr ref params
+checkIdent : TLName -> TEff TLSTypeExpr
+checkIdent cname@(MkTLName name type) = case nameToVar !(Args :- get) cname of
+                                             Nothing => checkType cname []
+                                             (Just arg) => do checkArgType arg [TLNatType, TLTypeType]
+                                                              pure $ MkTLSTypeVar (argRef arg)
+checkIdent cname@(MkTLNameNs ns name type) = checkType cname []
+
+checkTypeIdent : TLExpressionLang -> TEff TypeRef
+checkTypeIdent (TLEIdent x) = case !(convertTypeIdentToRef x) of
+                                   Nothing => raise "Not a type ident!"
+                                   (Just x) => pure x
+checkTypeIdent _ = raise "Not a type ident!"
 
 checkNatExpression : TLExpressionLang -> TEff TLSNat
 checkNatExpression (TLENat k) = pure $ MkTLSNat k
@@ -48,38 +119,109 @@ checkNatExpression (TLEIdent x) = do varRef <- checkVarWithType x TLNatType
 checkNatExpression (TLEExpression (x :: [])) = checkNatExpression x
 checkNatExpression _ = raise "Not a nat expression, where it should be!"
 
+catch : TEff a -> TEff (Either String a)
+catch eff = pure $ runInit [Store := !(Store :- get), Args := !(Args :- get), Section := !(Section :- get), default] eff
 
-checkTypeExpression : TLExpressionLang -> TEff TLSTypeExpr
-checkTypeExpression (TLENat k) = raise "Nat is not an expression!"
-checkTypeExpression (TLEIdent (MkTLName name TLNameTypeLC)) = case name of
-                                                               "int" => pure TLIntTypeBare
-                                                               "long" => pure TLLongTypeBare
-                                                               "string" => pure TLStringTypeBare
-                                                               "double" => pure TLDoubleTypeBare
-                                                               _ => do ident <- checkIdent name
-                                                                       pure $ MkTLSTypeBare ident
+mutual
+  checkExpression : TLExpressionLang -> TEff TLSExpr
+  checkExpression expr = case !(catch (checkNatExpression expr)) of
+                              Left str => do type <- checkTypeExpression expr
+                                             pure $ MkTLSExprType type
+                              Right nat => pure $ MKTLSExprNat nat
 
-checkTypeExpression (TLEIdent (MkTLName name TLNameTypeUC)) = case name of
-                                                               "Int" => pure TLIntType
-                                                               "Long" => pure TLLongType
-                                                               "String" => pure TLStringType
-                                                               "Double" => pure TLDoubleType
-                                                               "Type" => pure TLTypeType
-                                                               _ => checkIdent name
+  checkExprArgs : TLEArg -> TEff TLSEArg
+  checkExprArgs (MkTLEArg name type) = do expr <- checkTypeExpression type
+                                          pure $ ((show name), expr)
+  checkExprArgs (MkTLEOptArg name type) = raise "No optional vars in expression args"
+  checkExprArgs (MkTLEArgCond name cond type) = raise "No conditional vars inside expression args"
 
-checkTypeExpression (TLEIdent (MkTLNameNs ns name type)) = checkIdent (ns ++ "." ++ name)
+  checkTypeExpression : TLExpressionLang -> TEff TLSTypeExpr
+  checkTypeExpression (TLENat k) = raise "Nat is not an expression!"
+  checkTypeExpression (TLEIdent cname@(MkTLName name TLNameTypeLC)) = case name of
+                                                                          "int" => pure TLIntTypeBare
+                                                                          "long" => pure TLLongTypeBare
+                                                                          "string" => pure TLStringTypeBare
+                                                                          "double" => pure TLDoubleTypeBare
+                                                                          _ => do ident <- checkIdent cname
+                                                                                  pure $ MkTLSTypeBare ident
 
-checkTypeExpression TLEHash = pure TLNatType
-checkTypeExpression TLEEmpty = raise "No Empty Expressions allowed!"
-checkTypeExpression (TLEOperator TLBareOperator y) = checkTypeExpression y >>= \expr => pure $ MkTLSTypeBare expr
-checkTypeExpression (TLEOperator TLBangOperator y) = do assertSection Functions
-                                                        expr <- checkTypeExpression y
-                                                        pure $ MkTLSTypeBang expr
-checkTypeExpression (TLEOperator TLPlus _) = raise "Arithmetic operations should be already reduced!"
-checkTypeExpression (TLEExpression (x :: xs)) = do ref <- checkTypeIdent x
-                                                   args <- mapE (\exp => checkExpression exp) xs
-                                                   assertTypeParams ref args
-                                                   pure $ MkTLSTypeExpr ref args
-checkTypeExpression (TLEMultiArg x xs) = do nat <- checkNatExpression x
-                                            args <- mapE (\x => checkArgs x) xs
-                                            pure $ MkTLSTypeArray nat args
+  checkTypeExpression (TLEIdent cname@(MkTLName name TLNameTypeUC)) = case name of
+                                                                          "Int" => pure TLIntType
+                                                                          "Long" => pure TLLongType
+                                                                          "String" => pure TLStringType
+                                                                          "Double" => pure TLDoubleType
+                                                                          "Type" => pure TLTypeType
+                                                                          _ => checkIdent cname
+
+  checkTypeExpression (TLEIdent name@(MkTLNameNs ns _ type)) = checkIdent name
+
+  checkTypeExpression TLEHash = pure TLNatType
+  checkTypeExpression TLEEmpty = raise "No Empty Expressions allowed!"
+  checkTypeExpression (TLEOperator TLBareOperator y) = checkTypeExpression y >>= \expr => pure $ MkTLSTypeBare expr
+  checkTypeExpression (TLEOperator TLBangOperator y) = do assertSection Functions
+                                                          expr <- checkTypeExpression y
+                                                          pure $ MkTLSTypeBang expr
+  checkTypeExpression (TLEOperator TLPlus _) = raise "Arithmetic operations should be already reduced!"
+  checkTypeExpression (TLEExpression (x :: xs)) = do ref <- checkTypeIdent x
+                                                     args <- mapE (\exp => checkExpression exp) xs
+                                                     assertTypeParams ref args
+                                                     pure $ MkTLSTypeExpr ref args
+  checkTypeExpression (TLEMultiArg x xs) = do nat <- checkNatExpression x
+                                              args <- mapE (\x => checkExprArgs x) xs
+                                              pure $ MkTLSTypeArray nat args
+
+checkArg : TLEArg -> TTEff TLSArg
+checkArg (MkTLEArg name type) = do assertVarNotExist name
+                                   expr <- checkTypeExpression type
+                                   ref <- generateRef
+                                   insertVar $ (MkTLSArg (show name) ref expr)
+
+checkArg (MkTLEOptArg name type) = do assertVarNotExist name
+                                      expr <- checkTypeExpression type
+                                      if ((checkTypeEquivalence expr TLNatType) || (checkTypeEquivalence expr TLTypeType))
+                                         then (do ref <- generateRef
+                                                  insertVar $ (MkTLSArgOpt (show name) ref expr))
+                                         else raise "Optional vars should of type # or Type"
+
+checkArg (MkTLEArgCond name cond type) = do assertVarNotExist name
+                                            cd <- checkCond cond
+                                            expr <- checkTypeExpression type
+                                            ref <- generateRef
+                                            insertVar $ (MkTLSArgCond (show name) ref cd expr)
+
+checkCombinator : TLCombinator -> TTEff ()
+checkCombinator comb = do assertCombinatorName (identifier comb)
+                          Args :- put []
+                          cargs <- mapE (\arg => checkArg arg) (args comb)
+                          section <- Section :- get
+                          (case section of
+                                Types => do typeRef <- checkResultType (resultType comb)
+                                            insertConstructor $ MkTLSConstructor (show (identifier comb)) 0 cargs typeRef
+                                Functions => do type <- checkTypeExpression (resultType comb)
+                                                insertFunction $ MkTLSFunction (show (identifier comb)) 0 cargs type)
+
+checkDeclaration : TLDeclaration -> TTEff ()
+checkDeclaration (Combinator x) = checkCombinator x
+checkDeclaration (BuiltInCombinator x) = pure ()
+checkDeclaration (FinalDecl x y) = pure ()
+
+checkDeclarationBlock : TLDeclarationBlock -> TTEff ()
+checkDeclarationBlock (TypeDeclarationBlock xs) = do Section :- put Types
+                                                     mapE (\decl => checkDeclaration decl) xs
+                                                     pure ()
+checkDeclarationBlock (FunctionDeclarationBlock xs) = do Section :- put Functions
+                                                         mapE (\decl => checkDeclaration decl) xs
+                                                         pure ()
+checkProgram : TLProgram -> TTEff TLStore
+checkProgram (MkTLProgram xs) = do mapE (\block => checkDeclarationBlock block) xs
+                                   Store :- get
+
+export
+runTypechecker : TLProgram -> Either String TLStore
+runTypechecker program = runInit [
+    Store := emptyStore,
+    Args := [],
+    Section := Types,
+    default,
+    VarRefs := 0
+  ] (checkProgram program)

@@ -1,16 +1,19 @@
 module TL.Store.Store
 
+import Data.Vect
+import TL.Types
+
 %access public export
 
-data StoreTypeInsertError = StoreTypeInsertErrorExists
-data StoreCombinatorInsertError = StoreCombinatorInsertErrorExists
 
-interface TLStore store where
-  test : Int -> Int
-  -- insertType : TLSType -> Either StoreTypeInsertError store
-  -- insertTypeConstructor : String -> TLSCombinator -> Either StoreCombinatorInsertError store
-  -- insertFunctionConstructor : String -> TLSCombinator -> Either StoreCombinatorInsertError store
-  --
-  -- lookupType : store -> String -> Maybe TLSType
-  -- lookupTypeConstructor : store -> String -> Maybe TLSCombinator
-  -- lookupFunctionConstructor : store -> String -> Maybe TLSCombinator
+record TLStore where
+  constructor MkTLStore
+  types : Vect m TLType
+  functions : Vect n TLSFunction
+  constructors : Vect t TLSConstructor
+
+emptyStore : TLStore
+emptyStore = MkTLStore [] [] []
+
+storeNameToType : TLName -> TLStore -> Maybe TypeRef
+storeGetType : TypeRef -> TLStore -> TLType

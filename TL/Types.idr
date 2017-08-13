@@ -1,23 +1,69 @@
 module TL.Types
+import Data.Vect
 
 %access public export
 
+data TLNameType = TLNameTypeLC | TLNameTypeUC
+
+Eq TLNameType where
+  (==) TLNameTypeLC TLNameTypeLC = True
+  (==) TLNameTypeUC TLNameTypeUC = True
+  (==) _ _ = False
+
+data TLName : Type where
+  MkTLName : (name : String) -> (type : TLNameType) -> TLName
+  MkTLNameNs : (ns : String) -> (name : String) -> (type : TLNameType) -> TLName
+
+Show TLName where
+  show (MkTLName name type) = name
+  show (MkTLNameNs ns name type) = ns ++ "." ++ name
+
 data TLBuiltIn = TLInt | TLNat | TLLong | TLString | TLDouble | TLTType
+
+data TLTypeParam = TLParamNat | TLParamType
+
+data TLType : Type where
+    MkTLType : (name : String) -> List TLTypeParam -> TLType
+
+getTypeParams : TLType -> List TLTypeParam
+getTypeParams (MkTLType name xs) = xs
+
+Eq TLBuiltIn where
+  (==) TLInt TLInt = True
+  (==) TLNat TLNat = True
+  (==) TLLong TLLong = True
+  (==) TLString TLString = True
+  (==) TLDouble TLDouble = True
+  (==) TLTType TLTType = True
+  (==) _ _ = False
 
 TypeRef : Type
 TypeRef = Either TLBuiltIn Int
 
 VarRef : Type
-VarRef = Int
+VarRef = Either () Int
+
+VarRefBottom : VarRef
+VarRefBottom = Left ()
 
 Conditional : Type
-Conditional = (Int, Int)
+Conditional = (VarRef, Int)
 
 data TLSection = Types | Functions
+
+Show TLSection where
+  show Types = "Types"
+  show Functions = "Functions"
+
+Eq TLSection where
+  (==) Types Types = True
+  (==) Functions Functions = True
+  (==) _ _ = False
 
 mutual
   data TLSArg : Type where
     MkTLSArg : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
+    MkTLSArgOpt : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
     MkTLSArgCond : (id : String) -> (var_num : VarRef) ->
                    (cond : Conditional) -> (type : TLSTypeExpr) -> TLSArg
 
@@ -31,17 +77,58 @@ mutual
 
   data TLSTypeExpr : Type where
     MkTLSTypeExpr : (type : TypeRef) -> (children : List TLSExpr) -> TLSTypeExpr
-    MkTLSTypeArray : (mult : TLSNat) -> (args : List TLSArg) -> TLSTypeExpr
+    MkTLSTypeArray : (mult : TLSNat) -> (args : List (String, TLSTypeExpr)) -> TLSTypeExpr
     MkTLSTypeVar : (ref : VarRef) -> TLSTypeExpr
     MkTLSTypeBare : (expr : TLSTypeExpr) -> TLSTypeExpr
     MkTLSTypeBang : (expr : TLSTypeExpr) -> TLSTypeExpr
 
-record TLSCombinator where
-  constructor MkTLSCombinator
+  Eq TLSNat where
+    (==) (MkTLSNat nat) (MkTLSNat nat1) = nat == nat1
+    (==) (MkTLSNatVar ref) (MkTLSNatVar ref1) = ref == ref1
+    (==) _ _ = False
+
+  Eq TLSExpr where
+    (==) (MkTLSExprType type1) (MkTLSExprType type2) = type1 == type2
+    (==) (MKTLSExprNat natExpr) (MKTLSExprNat natExpr1) = natExpr == natExpr1
+    (==) _ _ = False
+
+  Eq TLSTypeExpr where
+    (==) (MkTLSTypeExpr type children) (MkTLSTypeExpr type2 children2) = type == type2 && children == children2
+    (==) (MkTLSTypeArray mult args) (MkTLSTypeArray mult2 args2) = mult == mult2 && args == args2
+    (==) (MkTLSTypeVar ref) (MkTLSTypeVar ref2) = ref == ref2
+    (==) (MkTLSTypeBare expr) (MkTLSTypeBare expr2) = expr == expr2
+    (==) (MkTLSTypeBang expr) (MkTLSTypeBang expr2) = expr == expr2
+    (==) _ _ = False
+
+TLSEArg : Type
+TLSEArg = (String, TLSTypeExpr)
+
+record TLSConstructor where
+  constructor MkTLSConstructor
+  identifier : String
+  magic : Int
+  args : List TLSArg
+  resultType : TypeRef
+
+record TLSFunction where
+  constructor MkTLSFunction
   identifier : String
   magic : Int
   args : List TLSArg
   resultType : TLSTypeExpr
+
+
+argId : TLSArg -> String
+argId (MkTLSArg id var_num type) = id
+argId (MkTLSArgCond id var_num cond type) = id
+
+argType : TLSArg -> TLSTypeExpr
+argType (MkTLSArg id var_num type) = type
+argType (MkTLSArgCond id var_num cond type) = type
+
+argRef : TLSArg -> VarRef
+argRef (MkTLSArg id var_num type) = var_num
+argRef (MkTLSArgCond id var_num cond type) = var_num
 
 TLNatType : TLSTypeExpr
 TLNatType = MkTLSTypeExpr (Left TLNat) []
