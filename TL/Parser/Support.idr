@@ -54,6 +54,11 @@ Show TLCName where
   show (TLCNameShort name) = (show name)
   show TLCNameEmpty = "_"
 
+getName : TLCName -> TLName
+getName (TLCNameFull name magic) = name
+getName (TLCNameShort name) = name
+getName TLCNameEmpty = MkTLName "_" TLNameTypeLC
+
 data TLVarName : Type where
   MkTLVarName : (name : TLName) -> TLVarName
   MkTLVarOpt : TLVarName

@@ -1,5 +1,4 @@
 module TL.Types
-import Data.Vect
 
 %access public export
 
@@ -14,6 +13,10 @@ data TLName : Type where
   MkTLName : (name : String) -> (type : TLNameType) -> TLName
   MkTLNameNs : (ns : String) -> (name : String) -> (type : TLNameType) -> TLName
 
+nameType : TLName -> TLNameType
+nameType (MkTLName name type) = type
+nameType (MkTLNameNs ns name type) = type
+
 Show TLName where
   show (MkTLName name type) = name
   show (MkTLNameNs ns name type) = ns ++ "." ++ name
@@ -22,11 +25,18 @@ data TLBuiltIn = TLInt | TLNat | TLLong | TLString | TLDouble | TLTType
 
 data TLTypeParam = TLParamNat | TLParamType
 
+Eq TLTypeParam where
+  (==) TLParamNat TLParamNat = True
+  (==) TLParamType TLParamType = True
+  (==) _ _ = False
+
 data TLType : Type where
-    MkTLType : (name : String) -> List TLTypeParam -> TLType
+  MkTLType : (name : String) -> List TLTypeParam -> TLType
+  MkTLTypeBuiltin : TLBuiltIn -> TLType
 
 getTypeParams : TLType -> List TLTypeParam
 getTypeParams (MkTLType name xs) = xs
+getTypeParams (MkTLTypeBuiltin builtin) = []
 
 Eq TLBuiltIn where
   (==) TLInt TLInt = True
@@ -41,10 +51,7 @@ TypeRef : Type
 TypeRef = Either TLBuiltIn Int
 
 VarRef : Type
-VarRef = Either () Int
-
-VarRefBottom : VarRef
-VarRefBottom = Left ()
+VarRef = Int
 
 Conditional : Type
 Conditional = (VarRef, Int)

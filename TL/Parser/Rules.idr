@@ -5,6 +5,7 @@ import Text.Lexer
 
 import TL.Parser.Tokenizer
 import TL.Parser.Support
+import TL.Types
 
 mutual
   parseFullExpression : RuleWeek TLExpressionLang

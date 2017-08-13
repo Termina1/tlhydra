@@ -2,7 +2,7 @@ module TL.Typechecker.Typechecker
 
 import TL.Types
 import TL.Parser.Support
-import Data.Vect
+import TL.Typechecker.Normalizer
 
 import Effects
 import Effect.State
@@ -29,37 +29,105 @@ TTEff ret = Effects.SimpleEff.Eff ret [
   Args ::: STATE (List TLSArg),
   Section ::: STATE TLSection,
   EXCEPTION String,
-  VarRefs ::: STATE Int
+  VarRefs ::: STATE VarRef
 ]
 
-generateRef : TTEff VarRef
-
-nameToVar : List TLSArg -> TLName -> Maybe TLSArg
+nameToVar : List TLSArg -> String -> Maybe TLSArg
 nameToVar [] x = Nothing
-nameToVar (y :: xs) x = if (argId y) == (show x) then Just y else nameToVar xs x
+nameToVar (y :: xs) x = if (argId y) == x then Just y else nameToVar xs x
+
+convertTypeIdentToRef : TLName -> TEff (Maybe TypeRef)
+convertTypeIdentToRef name = pure $ storeNameToType name !(Store :- get)
 
 varToRef : TLSArg -> VarRef
 varToRef (MkTLSArg id var_num type) = var_num
 varToRef (MkTLSArgCond id var_num cond type) = var_num
 
 insertVar : TLSArg -> TEff TLSArg
+insertVar arg = do Args :- update (\ls => ls ++ [arg])
+                   pure arg
+
+generateRef : TTEff VarRef
+generateRef = do VarRefs :- update (+ 1)
+                 VarRefs :- get
+
 insertConstructor : TLSConstructor -> TEff ()
+insertConstructor constr = do Store :- update (storeInsertConstructor constr)
+                              pure ()
+
 insertFunction : TLSFunction -> TEff ()
-assertVarNotExist : TLVarName -> TEff ()
-checkCond : TLECond -> TEff Conditional
-checkResultType : TLExpressionLang -> TEff TypeRef
-assertCombinatorName : TLCName -> TEff ()
+insertFunction func = do Store :- update (storeInsertFunction func)
+                         pure ()
+
+insertType : TLType -> TEff TypeRef
+insertType type = do Store :- update (storeInsertType type)
+                     store <- Store :- get
+                     pure $ Right $ cast $ length (types store)
+
 
 checkTypeEquivalence : TLSTypeExpr -> TLSTypeExpr -> Bool
 checkTypeEquivalence a b = a == b
+
+checkArgType : TLSArg -> List TLSTypeExpr -> TEff ()
+checkArgType var xs = let type = argType var in
+                          if any (checkTypeEquivalence type) xs
+                             then pure ()
+                             else raise $ "Var " ++ (argId var) ++ " is of an unexpected type"
+
+compareTypeParams : TypeRef -> List TLTypeParam -> TEff ()
+compareTypeParams ref params = let type = storeGetType ref !(Store :- get) in
+                               if (getTypeParams type) == params
+                                  then pure ()
+                                  else raise "Wrong parameters for type"
+
+checkTypeParamType : TLSTypeExpr -> TEff TLTypeParam
+checkTypeParamType (MkTLSTypeExpr (Left TLTType) []) = pure TLParamType
+checkTypeParamType (MkTLSTypeExpr (Left TLNat) []) = pure TLParamNat
+checkTypeParamType _ = raise "Not permitted type to depend"
+
+checkTypeParam : TLExpressionLang -> TEff TLTypeParam
+checkTypeParam param@(TLEIdent (MkTLName name type)) = case nameToVar !(Args :- get) name of
+                                                            Nothing => raise $ "Var not existed: " ++ (show param)
+                                                            (Just arg) => checkTypeParamType $ argType arg
+
+checkTypeParam expr = raise $ "Not a type param: " ++ (show expr)
+
+checkResultType : TLExpressionLang -> TEff TypeRef
+checkResultType (TLEIdent cname) with (nameType cname)
+  checkResultType (TLEIdent cname) | TLNameTypeLC = raise $ "Type name should start from big letter: " ++ (show cname)
+  checkResultType (TLEIdent cname) | TLNameTypeUC = case !(convertTypeIdentToRef cname) of
+                                                         Nothing => insertType $ MkTLType (show cname) []
+                                                         (Just typeRef) => pure typeRef
+checkResultType (TLEExpression ((TLEIdent cname) :: params)) = do tparams <- mapE (\expr => checkTypeParam expr) params
+                                                                  case !(convertTypeIdentToRef cname) of
+                                                                       Nothing => insertType $ MkTLType (show cname) tparams
+                                                                       (Just ref) => do compareTypeParams ref tparams
+                                                                                        pure ref
+checkResultType expr = raise $ "Not a type: " ++ (show expr)
+
+assertVarNotExist : TLVarName -> TEff ()
+assertVarNotExist name = case nameToVar !(Args :- get) (show name) of
+                              Nothing => pure ()
+                              (Just x) => raise $ "Duplicate var name: " ++ (show name)
+
+checkCond : TLECond -> TEff Conditional
+checkCond (name, bit) = case nameToVar !(Args :- get) name of
+                             Nothing => raise "Can't depend on undeclared var"
+                             (Just arg) => pure $ ((varToRef arg), (cast bit))
+
+assertCombinatorName : TLCName -> TLSection -> TEff ()
+assertCombinatorName x section with (section)
+  assertCombinatorName x section | Types = case storeNameToConstructor (getName x) !(Store :- get) of
+                                                Nothing => pure ()
+                                                Just comb => raise $ "Duplicate name for constructour: " ++ (show x)
+  assertCombinatorName x section | Functions = case storeNameToFunction (getName x) !(Store :- get) of
+                                                    Nothing => pure ()
+                                                    Just comb => raise $ "Dulpicate name for function: " ++ (show x)
 
 assertSection : TLSection -> TEff ()
 assertSection x = if !(Section :- get) == x
                      then pure ()
                      else raise $ "Now is not a section " ++ (show x)
-
-convertTypeIdentToRef : TLName -> TEff (Maybe TypeRef)
-convertTypeIdentToRef name = pure $ storeNameToType name !(Store :- get)
 
 unifyParamAndExpr : TLTypeParam -> TLSExpr -> Bool
 unifyParamAndExpr TLParamNat (MKTLSExprNat natExpr) = True
@@ -81,18 +149,12 @@ assertTypeParams x xs = let type = storeGetType x !(Store :- get) in
                            else raise "TypeError: cant unify types and expression"
 
 checkVarWithType : TLName -> TLSTypeExpr -> TEff VarRef
-checkVarWithType name expr = case nameToVar !(Args :- get) name of
+checkVarWithType name expr = case nameToVar !(Args :- get) (show name) of
                                   Nothing => raise $ "Arg " ++ (show name) ++ " not found"
                                   (Just var@(MkTLSArg id var_num type)) => if checkTypeEquivalence type expr
                                                                            then pure $ varToRef var
                                                                            else raise "Var of an unexpected type"
                                   (Just (MkTLSArgCond id var_num cond type)) => raise "Can't depend on conditional var"
-
-checkArgType : TLSArg -> List TLSTypeExpr -> TEff ()
-checkArgType var xs = let type = argType var in
-                          if any (checkTypeEquivalence type) xs
-                             then pure ()
-                             else raise $ "Var " ++ (argId var) ++ " is of an unexpected type"
 
 checkType : TLName -> List TLSExpr -> TEff TLSTypeExpr
 checkType name params = case !(convertTypeIdentToRef name) of
@@ -100,12 +162,14 @@ checkType name params = case !(convertTypeIdentToRef name) of
                       (Just ref) => do assertTypeParams ref params
                                        pure $ MkTLSTypeExpr ref params
 checkIdent : TLName -> TEff TLSTypeExpr
-checkIdent cname@(MkTLName name type) = case nameToVar !(Args :- get) cname of
+checkIdent cname@(MkTLName name type) = case nameToVar !(Args :- get) (show cname) of
                                              Nothing => checkType cname []
                                              (Just arg) => do checkArgType arg [TLNatType, TLTypeType]
                                                               pure $ MkTLSTypeVar (argRef arg)
 checkIdent cname@(MkTLNameNs ns name type) = checkType cname []
 
+
+-- TODO: process constructor names as bare types
 checkTypeIdent : TLExpressionLang -> TEff TypeRef
 checkTypeIdent (TLEIdent x) = case !(convertTypeIdentToRef x) of
                                    Nothing => raise "Not a type ident!"
@@ -170,14 +234,17 @@ mutual
                                               args <- mapE (\x => checkExprArgs x) xs
                                               pure $ MkTLSTypeArray nat args
 
+checkTypeExpressionAndNormalize : TLExpressionLang -> TEff TLSTypeExpr
+checkTypeExpressionAndNormalize expr = checkTypeExpression (expressionReduce expr)
+
 checkArg : TLEArg -> TTEff TLSArg
 checkArg (MkTLEArg name type) = do assertVarNotExist name
-                                   expr <- checkTypeExpression type
+                                   expr <- checkTypeExpressionAndNormalize type
                                    ref <- generateRef
                                    insertVar $ (MkTLSArg (show name) ref expr)
 
 checkArg (MkTLEOptArg name type) = do assertVarNotExist name
-                                      expr <- checkTypeExpression type
+                                      expr <- checkTypeExpressionAndNormalize type
                                       if ((checkTypeEquivalence expr TLNatType) || (checkTypeEquivalence expr TLTypeType))
                                          then (do ref <- generateRef
                                                   insertVar $ (MkTLSArgOpt (show name) ref expr))
@@ -185,15 +252,16 @@ checkArg (MkTLEOptArg name type) = do assertVarNotExist name
 
 checkArg (MkTLEArgCond name cond type) = do assertVarNotExist name
                                             cd <- checkCond cond
-                                            expr <- checkTypeExpression type
+                                            expr <- checkTypeExpressionAndNormalize type
                                             ref <- generateRef
                                             insertVar $ (MkTLSArgCond (show name) ref cd expr)
 
 checkCombinator : TLCombinator -> TTEff ()
-checkCombinator comb = do assertCombinatorName (identifier comb)
+checkCombinator comb = do section <- Section :- get
+                          assertCombinatorName (identifier comb) section
                           Args :- put []
+                          VarRefs :- put 0
                           cargs <- mapE (\arg => checkArg arg) (args comb)
-                          section <- Section :- get
                           (case section of
                                 Types => do typeRef <- checkResultType (resultType comb)
                                             insertConstructor $ MkTLSConstructor (show (identifier comb)) 0 cargs typeRef

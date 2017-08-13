@@ -3,6 +3,7 @@ module TL.Parser.Tokenizer
 import Text.Lexer
 import Data.String
 import Data.Vect
+import TL.Types
 
 import TL.Parser.Support
 

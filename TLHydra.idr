@@ -1,60 +1,26 @@
 module Main
-import TLParser
-import TLParserTypes
--- import TLStore
--- import TLStoreTypes
-import Lightyear.Strings
-import Effects
-import Data.SortedMap
-import Effect.State
-import Effect.Exception
 
-%access public export
+import TL.Parser.Rules
+import TL.Typechecker.Typechecker
+import TL.Store.Store
+import Text.Parser
+import Text.Lexer
+import TL.Parser.Support
 
-data Schema = MkSchema
+evaluateProgram : String -> Either String TLStore
+evaluateProgram str with (parseTL str)
+  evaluateProgram str | (Left (Error x xs)) = Left x
+  evaluateProgram str | (Right tlProgram) with (runTypechecker tlProgram)
+    evaluateProgram str | (Right tlProgram) | (Left err) = Left err
+    evaluateProgram str | (Right tlProgram) | (Right store) = pure store
 
-readFileUntilEnd : File -> String -> IO (Either FileError String)
-readFileUntilEnd file acc = do end <- fEOF file
-                               if end then pure (Right acc)
-                                      else do Right line <- fGetLine file
-                                              | Left error => pure (Left error)
-                                              readFileUntilEnd file (acc ++ line)
+testStr : String
+testStr = """
+tls.schema_v2 version:int date:int types_num:# types:types_num*[tls.Type]
 
-readSchemeFile : String -> IO (Either FileError String)
-readSchemeFile filename = do Right file <- openFile filename Read
-                             | Left error => pure (Left error)
-                             Right filestr <- readFileUntilEnd file ""
-                             | Left error => do closeFile file
-                                                pure (Left error)
-                             closeFile file
-                             pure (Right filestr)
+    constructor_num:# constructors:constructor_num*[tls.Combinator]
+    functions_num:# functions:functions_num*[tls.Combinator] = tls.Schema;
+tls.type name:int id:string constructors_num:int flags:int arity:int params_type:long = tls.Type;
 
-testText : String
-testText = "int ? = Int;\nlong ? = Long;\ndouble ? = Double;\nstring ? = String;\nvector {t:Type} test:int = Vector t;"
-
--- testProgram : String -> Either String TLProgram
--- testProgram str = parse parseProgram str
---                   >>= \program => validateAstAndConvertToStore program
-
-testIo : Show a => String -> Parser a -> IO ()
-testIo x p = do Right z <- pure (parse p x)
-                  | Left y => putStrLn y
-                putStrLn (show z)
-
-testSimple : String -> Either String TLProgram
-testSimple x = parse parseProgram x
---
--- initArg : TLSArg
--- initArg = (MkTLSArg (Just "X") Nothing typeType)
-
--- testTerm : String -> Either String TLSTypeExpr
--- testTerm str = parse parseTerm str >>= \term => (runInit [Args := [initArg], Store := (MkTLStore empty empty empty), default] (parseSimpleTermToType term))
-
-main : IO ()
-main = do Right result <- readSchemeFile "./example.tl"
-            | Left error => putStrLn (show error)
-          Right parseResult <- pure $ parse stripComments result
-            | Left error => putStrLn error
-          Right schemeTokens <- pure $ parse parseProgram parseResult
-            | Left error => putStrLn error
-          putStrLn "Done!"
+tls.combinator name:int id:string type_name:int left:tls.CombinatorLeft right:tls.CombinatorRight = tls.Combinator;
+"""
