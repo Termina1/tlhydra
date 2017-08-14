@@ -25,7 +25,7 @@ storeNameToType name store = storeNameToTypeHelper (show name) (types store) 0
 
 storeGetType : TypeRef -> TLStore -> TLType
 storeGetType (Left builtin) store = MkTLTypeBuiltin builtin
-storeGetType (Right r) store = case drop (cast (r - 1)) (types store) of
+storeGetType (Right r) store = case drop (cast r) (types store) of
                                     [] => MkTLType "bottom" []
                                     (x :: xs) => x
 

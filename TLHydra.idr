@@ -16,11 +16,17 @@ evaluateProgram str with (parseTL str)
 
 testStr : String
 testStr = """
-tls.schema_v2 version:int date:int types_num:# types:types_num*[tls.Type]
 
-    constructor_num:# constructors:constructor_num*[tls.Combinator]
-    functions_num:# functions:functions_num*[tls.Combinator] = tls.Schema;
-tls.type name:int id:string constructors_num:int flags:int arity:int params_type:long = tls.Type;
+vector {t:Type} # [t] = Vector t;
+tuple {t:Type} {n:#} [t] = Tuple t n;
+vectorTotal {t:Type} total_count:int vector:%(Vector t) = VectorTotal t;
 
-tls.combinator name:int id:string type_name:int left:tls.CombinatorLeft right:tls.CombinatorRight = tls.Combinator;
+
+dictionaryField {t:Type} key:string value:t = DictionaryField t;
+dictionary {t:Type} %(Vector %(DictionaryField t)) = Dictionary t;
 """
+
+testIO : String -> IO ()
+testIO str with (evaluateProgram str)
+  testIO str | (Left l) = putStrLn ("Error: " ++ l)
+  testIO str | (Right r) = putStrLn "Done!"
