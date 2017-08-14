@@ -1,5 +1,9 @@
 module TL.Store.Store
 
+import Effects
+import Effect.State
+import Effect.Exception
+import Effect.StdIO
 import TL.Types
 
 %access public export
@@ -9,6 +13,29 @@ record TLStore where
   types : List TLType
   functions : List TLSFunction
   constructors : List TLSConstructor
+
+data Args : Type where
+data Store : Type where
+data Section : Type where
+data VarRefs : Type where
+
+TEff : Type -> Type
+TEff ret = Effects.SimpleEff.Eff ret [
+  Store ::: STATE TLStore,
+  Args ::: STATE (List TLSArg),
+  Section ::: STATE TLSection,
+  EXCEPTION String
+]
+
+TTEff : Type -> Type
+TTEff ret = Effects.SimpleEff.Eff ret [
+  Store ::: STATE TLStore,
+  Args ::: STATE (List TLSArg),
+  Section ::: STATE TLSection,
+  EXCEPTION String,
+  VarRefs ::: STATE VarRef
+]
+
 
 emptyStore : TLStore
 emptyStore = MkTLStore [] [] []

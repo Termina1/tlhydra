@@ -104,6 +104,7 @@ mutual
     MkTLSTypeVar : (ref : VarRef) -> TLSTypeExpr
     MkTLSTypeBare : (expr : TLSTypeExpr) -> TLSTypeExpr
     MkTLSTypeBang : (expr : TLSTypeExpr) -> TLSTypeExpr
+    MkTLSTypeHole : (name : TLName) -> List TLSExpr -> TLSTypeExpr
 
   Show TLSArg where
     show (MkTLSArg id var_num type) = id ++ ":" ++ (show type)
@@ -124,6 +125,7 @@ mutual
     show (MkTLSTypeVar ref) = "TypeVar #" ++ (show ref)
     show (MkTLSTypeBare expr) = "%" ++ (show expr)
     show (MkTLSTypeBang expr) = "!" ++ (show expr)
+    show (MkTLSTypeHole name exprs) = "?hole " ++ (show name) ++ " " ++ (show exprs)
 
   Eq TLSNat where
     (==) (MkTLSNat nat) (MkTLSNat nat1) = nat == nat1
@@ -161,6 +163,9 @@ record TLSConstructor where
   magic : Int
   args : List TLSArg
   resultType : TypeRef
+
+Show TLSConstructor where
+  show (MkTLSConstructor identifier magic args resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
 
 record TLSFunction where
   constructor MkTLSFunction

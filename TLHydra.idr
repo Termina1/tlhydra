@@ -16,17 +16,15 @@ evaluateProgram str with (parseTL str)
 
 testStr : String
 testStr = """
-
-vector {t:Type} # [t] = Vector t;
-tuple {t:Type} {n:#} [t] = Tuple t n;
-vectorTotal {t:Type} total_count:int vector:%(Vector t) = VectorTotal t;
-
-
-dictionaryField {t:Type} key:string value:t = DictionaryField t;
-dictionary {t:Type} %(Vector %(DictionaryField t)) = Dictionary t;
 """
 
 testIO : String -> IO ()
 testIO str with (evaluateProgram str)
   testIO str | (Left l) = putStrLn ("Error: " ++ l)
   testIO str | (Right r) = putStrLn "Done!"
+
+export
+main : IO ()
+main with (evaluateProgram testStr)
+  main | (Left l) = putStrLn ("Error: " ++ l)
+  main | (Right r) = putStrLn "Done!"

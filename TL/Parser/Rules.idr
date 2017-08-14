@@ -7,6 +7,13 @@ import TL.Parser.Tokenizer
 import TL.Parser.Support
 import TL.Types
 
+sebBy1 : Grammar tok True () -> Grammar tok False a ->
+         Grammar tok False (List a)
+sebBy1 sep p = do x <- p
+                  (do sep
+                      xs <- sebBy1 sep p
+                      pure (x :: xs)) <|> pure [x]
+
 mutual
   parseFullExpression : RuleWeek TLExpressionLang
   parseFullExpression = do exprs <- many parseExpression
@@ -55,16 +62,18 @@ mutual
                  pure $ TLEIdent name
 
 
-parseResultTypeHelper : Rule TLExpressionLang
-parseResultTypeHelper = do expect $ TLTokenChar '<'
-                           expr <- sepBy1 (expectUnit $ TLTokenChar ',') parseExpression
-                           expect $ TLTokenChar '<'
-                           pure $ TLEExpression expr
+parseResultTypeHelper : TLName -> Rule TLExpressionLang
+parseResultTypeHelper name = do expect $ TLTokenChar '<'
+                                commit
+                                expr <- sebBy1 (expectUnit $ TLTokenChar ',') parseFullExpression
+                                expect $ TLTokenChar '>'
+                                pure $ TLEExpression ((TLEIdent name) :: expr)
 
 parseResultType : Rule TLExpressionLang
 parseResultType = do name <- boxedTypeName
-                     expr <- (many parseExpression) >>= (\expr => pure $ TLEExpression expr) <|> parseResultTypeHelper
-                     pure $ TLEExpression [(TLEIdent name), expr]
+                     (parseResultTypeHelper name) <|>
+                       (many parseExpression) >>= (\expr => pure $ TLEExpression ((TLEIdent name) :: expr))
+
 
 parseTypTermWithBang : Rule TLExpressionLang
 parseTypTermWithBang = do bang <- optional $ expect $ TLTokenChar '!'
