@@ -24,6 +24,7 @@ mutual
                                                   pure (MkTLSTypeExpr type cchildren)
   fillHoleType (MkTLSTypeArray mult args) = do cargs <- mapE (\(name, expr) => pure (name, !(fillHoleType expr))) args
                                                pure (MkTLSTypeArray mult cargs)
+  fillHoleType (MkTLSTypeBare (MkTLSTypeBare expr)) = pure $ MkTLSTypeBare !(fillHoleType expr)
   fillHoleType (MkTLSTypeBare expr) = pure $ MkTLSTypeBare !(fillHoleType expr)
   fillHoleType (MkTLSTypeBang expr) = pure $ MkTLSTypeBang !(fillHoleType expr)
   fillHoleType (MkTLSTypeHole name xs) = do exprs <- mapE (\expr => fillHoleExpr expr) xs
