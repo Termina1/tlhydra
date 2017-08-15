@@ -50,9 +50,9 @@ fillTypeHolesConstructors = do fconstrs <- mapE (\constr => fillTypeHolesConstru
                                pure ()
   where
     fillTypeHolesConstructorsHelper : TLSConstructor -> TEff TLSConstructor
-    fillTypeHolesConstructorsHelper (MkTLSConstructor identifier magic args type)
+    fillTypeHolesConstructorsHelper (MkTLSConstructor identifier magic args cref type)
       = do cargs <- mapE (\arg => fillHoleArgs arg) args
-           pure $ MkTLSConstructor identifier magic cargs type
+           pure $ MkTLSConstructor identifier magic cargs cref type
 
 export
 fillTypeHoles : TEff ()

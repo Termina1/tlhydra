@@ -21,7 +21,7 @@ testStr = """
 testIO : String -> IO ()
 testIO str with (evaluateProgram str)
   testIO str | (Left l) = putStrLn ("Error: " ++ l)
-  testIO str | (Right r) = putStrLn "Done!"
+  testIO str | (Right r) = putStrLn (show r)
 
 export
 main : IO ()

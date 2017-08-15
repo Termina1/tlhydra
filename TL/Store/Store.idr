@@ -14,10 +14,19 @@ record TLStore where
   functions : List TLSFunction
   constructors : List TLSConstructor
 
+Show TLStore where
+  show (MkTLStore types functions constructors) = ("--- types ---\n")
+                                                  ++ (show types) ++ "\n"
+                                                  ++ "--- constructors ---\n"
+                                                  ++ (show constructors) ++ "\n"
+                                                  ++ "--- functions ---\n"
+                                                  ++ (show functions) ++ "\n"
+
 data Args : Type where
 data Store : Type where
 data Section : Type where
 data VarRefs : Type where
+data CRefs : Type where
 
 TEff : Type -> Type
 TEff ret = Effects.SimpleEff.Eff ret [
@@ -33,7 +42,8 @@ TTEff ret = Effects.SimpleEff.Eff ret [
   Args ::: STATE (List TLSArg),
   Section ::: STATE TLSection,
   EXCEPTION String,
-  VarRefs ::: STATE VarRef
+  VarRefs ::: STATE VarRef,
+  CRefs ::: STATE VarRef
 ]
 
 
@@ -46,15 +56,15 @@ storeNameToType name store = storeNameToTypeHelper (show name) (types store) 0
     storeNameToTypeHelper : String -> List TLType -> Int -> Maybe TypeRef
     storeNameToTypeHelper sname [] i = Nothing
     storeNameToTypeHelper sname ((MkTLType tname xs) :: types) i = if tname == sname
-                                                                      then Just $ Right i
+                                                                      then Just $ Right (i, Nothing)
                                                                       else storeNameToTypeHelper sname types (i + 1)
     storeNameToTypeHelper sname ((MkTLTypeBuiltin builtin) :: types) i = Just $ Left builtin
 
 storeGetType : TypeRef -> TLStore -> TLType
 storeGetType (Left builtin) store = MkTLTypeBuiltin builtin
-storeGetType (Right r) store = case drop (cast r) (types store) of
-                                    [] => MkTLType "bottom" []
-                                    (x :: xs) => x
+storeGetType (Right (r, hint)) store = case drop (cast r) (types store) of
+                                            [] => MkTLType "bottom" []
+                                            (x :: xs) => x
 
 storeNameToConstructor : TLName -> TLStore -> Maybe TLSConstructor
 storeNameToConstructor name store = storeNameToConstructorHelper (show name) (constructors store)
@@ -79,7 +89,7 @@ storeInsertFunction : TLSFunction -> TLStore -> TLStore
 storeInsertFunction func store = record { functions = func :: (functions store) } store
 
 storeInsertConstructor : TLSConstructor -> TLStore -> TLStore
-storeInsertConstructor constr store = record { constructors = constr :: (constructors store) } store
+storeInsertConstructor constr store = record { constructors =  (constructors store) ++ [constr] } store
 
 storeInsertType : TLType -> TLStore -> TLStore
 storeInsertType type store = record { types = ((types store) ++ [type]) } store

@@ -48,7 +48,8 @@ assertTypeParams x xs = let type = storeGetType x !(Store :- get) in
 convertCombinatorNameToType : TLName -> TEff TypeRef
 convertCombinatorNameToType x = case storeNameToConstructor x !(Store :- get) of
                                      Nothing => raise $ "Undefined combnator name: " ++ (show x) ++ "\n constructors: " ++ (show $ constructors !(Store :- get))
-                                     (Just (MkTLSConstructor identifier magic args resultType)) => pure resultType
+                                     (Just (MkTLSConstructor identifier magic args cref (Right (ref, _)))) => pure $ Right (ref, cref)
+                                     (Just (MkTLSConstructor identifier magic args cref ref)) => pure ref
 
 mutual
   convertHelper : Bool -> TLName -> List TLSExpr -> TEff TLSTypeExpr

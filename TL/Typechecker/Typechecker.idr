@@ -42,7 +42,7 @@ insertFunction func = do Store :- update (storeInsertFunction func)
 insertType : TLType -> TEff TypeRef
 insertType type = do Store :- update (storeInsertType type)
                      store <- Store :- get
-                     pure $ Right $ (cast $ length (types store)) - 1
+                     pure $ Right $ ((cast $ length (types store)) - 1, Nothing)
 
 checkArgType : TLSArg -> List TLSTypeExpr -> TEff ()
 checkArgType var xs = let type = argType var in
@@ -224,15 +224,21 @@ checkArg (MkTLEArgCond name cond type) = do assertVarNotExist name type
                                             ref <- generateRef
                                             insertVar $ (MkTLSArgCond (show name) ref cd expr)
 
+genCref : TTEff ConstructorRef
+genCref = do ref <- CRefs :- get
+             CRefs :- update (+ 1)
+             pure $ Just ref
+
 checkCombinator : TLCombinator -> TTEff ()
 checkCombinator comb = do section <- Section :- get
                           assertCombinatorName (identifier comb) section
                           Args :- put []
                           VarRefs :- put 0
                           cargs <- mapE (\arg => checkArg arg) (args comb)
+                          cref <- genCref
                           (case section of
                                 Types => do typeRef <- checkResultType (expressionReduce (resultType comb))
-                                            insertConstructor $ MkTLSConstructor (show $ getName (identifier comb)) 0 cargs typeRef
+                                            insertConstructor $ MkTLSConstructor (show $ getName (identifier comb)) 0 cargs cref typeRef
                                 Functions => do type <- checkTypeExpression (expressionReduce (resultType comb))
                                                 insertFunction $ MkTLSFunction (show $ getName (identifier comb)) 0 cargs type)
 
@@ -261,5 +267,6 @@ runTypechecker program = runInit [
     Args := [],
     Section := Types,
     default,
-    VarRefs := 0
+    VarRefs := 0,
+    CRefs := 0
   ] (checkProgram program)

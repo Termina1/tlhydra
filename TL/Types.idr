@@ -63,8 +63,11 @@ Eq TLBuiltIn where
   (==) TLTType TLTType = True
   (==) _ _ = False
 
+ConstructorRef : Type
+ConstructorRef = Maybe Int
+
 TypeRef : Type
-TypeRef = Either TLBuiltIn Int
+TypeRef = Either TLBuiltIn (Int, ConstructorRef)
 
 VarRef : Type
 VarRef = Int
@@ -162,10 +165,11 @@ record TLSConstructor where
   identifier : String
   magic : Int
   args : List TLSArg
+  ref : ConstructorRef
   resultType : TypeRef
 
 Show TLSConstructor where
-  show (MkTLSConstructor identifier magic args resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
+  show (MkTLSConstructor identifier magic args cref resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
 
 record TLSFunction where
   constructor MkTLSFunction
@@ -173,6 +177,9 @@ record TLSFunction where
   magic : Int
   args : List TLSArg
   resultType : TLSTypeExpr
+
+Show TLSFunction where
+  show (MkTLSFunction identifier magic args resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
 
 
 argId : TLSArg -> String
