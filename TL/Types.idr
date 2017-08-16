@@ -1,5 +1,7 @@
 module TL.Types
 
+import Data.Bits
+
 %access public export
 
 data TLNameType = TLNameTypeLC | TLNameTypeUC
@@ -163,23 +165,29 @@ TLSEArg = (String, TLSTypeExpr)
 record TLSConstructor where
   constructor MkTLSConstructor
   identifier : String
-  magic : Int
+  magic : Integer
   args : List TLSArg
   ref : ConstructorRef
   resultType : TypeRef
 
+showMagic : Integer -> String
+showMagic x with (intToBits {n = 32} x)
+  showMagic x | (MkBits y) = b32ToString y
+
 Show TLSConstructor where
-  show (MkTLSConstructor identifier magic args cref resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
+  show (MkTLSConstructor identifier magic args cref resultType) = identifier
+    ++ "#" ++ (showMagic magic) ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
 
 record TLSFunction where
   constructor MkTLSFunction
   identifier : String
-  magic : Int
+  magic : Integer
   args : List TLSArg
   resultType : TLSTypeExpr
 
 Show TLSFunction where
-  show (MkTLSFunction identifier magic args resultType) = identifier ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
+  show (MkTLSFunction identifier magic args resultType) = identifier
+    ++ "#" ++ (showMagic magic) ++ " " ++ (show args) ++ " " ++ (show resultType) ++ "\n"
 
 
 argId : TLSArg -> String

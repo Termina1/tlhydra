@@ -31,3 +31,7 @@ mutual
                                              rs => TLEExpression rs
   expressionReduce (TLEMultiArg x xs) = TLEMultiArg (expressionReduce x) (map argReduce xs)
   expressionReduce expr = expr
+
+export total
+combinatorReduce : TLCombinator -> TLCombinator
+combinatorReduce (MkTLCombinator identifier args resultType) = MkTLCombinator identifier (map argReduce args) (expressionReduce resultType)

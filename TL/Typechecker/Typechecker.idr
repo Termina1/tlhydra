@@ -7,11 +7,11 @@ import TL.Typechecker.Normalizer
 import Effects
 import Effect.State
 import Effect.Exception
-import Effect.StdIO
 
 import TL.Store.Store
 import TL.Typechecker.TypeUnifier
 import TL.TypeChecker.TypeholeFiller
+import TL.Magic
 
 nameToVar : List TLSArg -> String -> Maybe TLSArg
 nameToVar [] x = Nothing
@@ -203,7 +203,7 @@ mutual
                                                    Just nat =>  pure $ MkTLSTypeArray nat args
 
 checkTypeExpressionAndNormalize : TLExpressionLang -> TEff TLSTypeExpr
-checkTypeExpressionAndNormalize expr = checkTypeExpression (expressionReduce expr)
+checkTypeExpressionAndNormalize expr = checkTypeExpression expr
 
 checkArg : TLEArg -> TTEff TLSArg
 checkArg (MkTLEArg name type) = do assertVarNotExist name type
@@ -231,16 +231,18 @@ genCref = do ref <- CRefs :- get
 
 checkCombinator : TLCombinator -> TTEff ()
 checkCombinator comb = do section <- Section :- get
+                          let comb = combinatorReduce comb
                           assertCombinatorName (identifier comb) section
                           Args :- put []
                           VarRefs :- put 0
                           cargs <- mapE (\arg => checkArg arg) (args comb)
                           cref <- genCref
+                          let magic = ensureMagic comb
                           (case section of
-                                Types => do typeRef <- checkResultType (expressionReduce (resultType comb))
-                                            insertConstructor $ MkTLSConstructor (show $ getName (identifier comb)) 0 cargs cref typeRef
-                                Functions => do type <- checkTypeExpression (expressionReduce (resultType comb))
-                                                insertFunction $ MkTLSFunction (show $ getName (identifier comb)) 0 cargs type)
+                                Types => do typeRef <- checkResultType (resultType comb)
+                                            insertConstructor $ MkTLSConstructor (show $ getName (identifier comb)) magic cargs cref typeRef
+                                Functions => do type <- checkTypeExpression (resultType comb)
+                                                insertFunction $ MkTLSFunction (show $ getName (identifier comb)) magic cargs type)
 
 checkDeclaration : TLDeclaration -> TTEff ()
 checkDeclaration (Combinator x) = checkCombinator x

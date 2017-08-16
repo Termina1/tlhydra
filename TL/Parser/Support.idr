@@ -50,7 +50,7 @@ data TLCName : Type where
   TLCNameEmpty : TLCName
 
 Show TLCName where
-  show (TLCNameFull name magic) = (show name) ++ "#" ++ magic
+  show (TLCNameFull name magic) = (show name)
   show (TLCNameShort name) = (show name)
   show TLCNameEmpty = "_"
 
@@ -71,13 +71,18 @@ data TLOperator = TLBareOperator | TLBangOperator | TLPlus
 
 Show TLOperator where
   show TLBareOperator = "%"
-  show TLBangOperator = "!"
+  show TLBangOperator = ""
   show TLPlus = "+"
 
 data TLFinalId = TLEmpty | TLFinal | TLNew
 
 glueList : Show a => List a -> String
-glueList xs = foldl (\acc, t => acc ++ t) "" (intersperse " " (map show xs))
+glueList xs = foldl glueListHelper "" (map show xs)
+  where
+    glueListHelper : String -> String -> String
+    glueListHelper acc "" = acc
+    glueListHelper "" t = t
+    glueListHelper acc t = acc ++ " " ++ t
 
 mutual
   TLECond : Type
@@ -99,7 +104,7 @@ mutual
 
   Show TLEArg where
     show (MkTLEArg name type) = (show name) ++ ":" ++ (show type)
-    show (MkTLEOptArg name type) = "{" ++ (show name) ++ ":" ++ (show type) ++ "}"
+    show (MkTLEOptArg name type) = (show name) ++ ":" ++ (show type)
     show (MkTLEArgCond name (a, b) type) = (show name) ++ ":" ++ a ++ "." ++ (show b) ++ "?" ++ (show type)
 
   Show TLExpressionLang where
@@ -107,9 +112,9 @@ mutual
     show (TLEIdent x) = show x
     show TLEHash = "#"
     show TLEEmpty = ""
-    show (TLEOperator x y) = (show x) ++ " " ++ (show y)
+    show (TLEOperator x y) = (show x) ++ (show y)
     show (TLEExpression xs) = glueList xs
-    show (TLEMultiArg TLEEmpty xs) = "[" ++ (glueList xs) ++ "]"
+    show (TLEMultiArg TLEEmpty xs) = "[ " ++ (glueList xs) ++ " ]"
     show (TLEMultiArg x xs) = (show x) ++ "*[" ++ (glueList xs) ++ "]"
 
 record TLCombinator where

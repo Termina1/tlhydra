@@ -6,6 +6,9 @@ import TL.Store.Store
 import Text.Parser
 import Text.Lexer
 import TL.Parser.Support
+import TL.Parser.Rules
+import TL.Parser.Tokenizer
+import crc32
 
 evaluateProgram : String -> Either String TLStore
 evaluateProgram str with (parseTL str)
