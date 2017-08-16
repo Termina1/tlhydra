@@ -30,4 +30,4 @@ export
 main : IO ()
 main with (evaluateProgram testStr)
   main | (Left l) = putStrLn ("Error: " ++ l)
-  main | (Right r) = putStrLn "Done!"
+  main | (Right r) = putStrLn (show r)
