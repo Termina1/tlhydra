@@ -89,12 +89,6 @@ Eq TLSection where
   (==) _ _ = False
 
 mutual
-  data TLSArg : Type where
-    MkTLSArg : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
-    MkTLSArgOpt : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
-    MkTLSArgCond : (id : String) -> (var_num : VarRef) ->
-                   (cond : Conditional) -> (type : TLSTypeExpr) -> TLSArg
-
   data TLSNat : Type where
     MkTLSNat : (nat : Nat) -> TLSNat
     MkTLSNatVar : (ref : VarRef) -> TLSNat
@@ -110,11 +104,6 @@ mutual
     MkTLSTypeBare : (expr : TLSTypeExpr) -> TLSTypeExpr
     MkTLSTypeBang : (expr : TLSTypeExpr) -> TLSTypeExpr
     MkTLSTypeHole : (name : TLName) -> List TLSExpr -> TLSTypeExpr
-
-  Show TLSArg where
-    show (MkTLSArg id var_num type) = id ++ ":" ++ (show type)
-    show (MkTLSArgOpt id var_num type) = "{" ++ id ++ ":" ++ (show type) ++ "}"
-    show (MkTLSArgCond id var_num cond type) = id ++ ":" ++ (show type) ++ " " ++ (show cond)
 
   Show TLSNat where
     show (MkTLSNat nat) = (show nat)
@@ -161,6 +150,17 @@ mutual
 
 TLSEArg : Type
 TLSEArg = (String, TLSTypeExpr)
+
+data TLSArg : Type where
+  MkTLSArg : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
+  MkTLSArgOpt : (id : String) -> (var_num : VarRef) -> (type : TLSTypeExpr) -> TLSArg
+  MkTLSArgCond : (id : String) -> (var_num : VarRef) ->
+                 (cond : Conditional) -> (type : TLSTypeExpr) -> TLSArg
+
+Show TLSArg where
+  show (MkTLSArg id var_num type) = id ++ ":" ++ (show type)
+  show (MkTLSArgOpt id var_num type) = "{" ++ id ++ ":" ++ (show type) ++ "}"
+  show (MkTLSArgCond id var_num cond type) = id ++ ":" ++ (show type) ++ " " ++ (show cond)
 
 record TLSConstructor where
   constructor MkTLSConstructor
