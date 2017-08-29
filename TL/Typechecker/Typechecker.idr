@@ -17,6 +17,12 @@ nameToVar : List TLSArg -> String -> Maybe TLSArg
 nameToVar [] x = Nothing
 nameToVar (y :: xs) x = if (argId y) == x then Just y else nameToVar xs x
 
+assertVarContext : VarCtx -> TEff ()
+assertVarContext ctx = do curCtx <- VarContext :- get
+                          if curCtx == ctx
+                             then pure ()
+                             else raise $ "Not an " ++ (show ctx) ++ " arg context"
+
 varToRef : TLSArg -> VarRef
 varToRef (MkTLSArg id var_num type) = var_num
 varToRef (MkTLSArgCond id var_num cond type) = var_num
@@ -141,9 +147,6 @@ checkNatExpression (TLEIdent x) = case !(checkVarWithType x TLNatType) of
 checkNatExpression (TLEExpression (x :: [])) = checkNatExpression x
 checkNatExpression _ = pure Nothing
 
-catch : TEff a -> TEff (Either String a)
-catch eff = pure $ runInit [Store := !(Store :- get), Args := !(Args :- get), Section := !(Section :- get), default] eff
-
 mutual
   checkExpression : TLExpressionLang -> TEff TLSExpr
   checkExpression expr = case !(checkNatExpression expr) of
@@ -164,6 +167,9 @@ mutual
                                                                           "long" => pure TLLongTypeBare
                                                                           "string" => pure TLStringTypeBare
                                                                           "double" => pure TLDoubleTypeBare
+                                                                          "bytes" => pure TLStringTypeBare
+                                                                          "int128" => pure TLTypeInt128Bare
+                                                                          "int256" => pure TLTypeInt256Bare
                                                                           _ => do ident <- checkIdent cname
                                                                                   case ident of
                                                                                     (MkTLSTypeVar _) => pure ident
@@ -174,7 +180,8 @@ mutual
                                                                           "Long" => pure TLLongType
                                                                           "String" => pure TLStringType
                                                                           "Double" => pure TLDoubleType
-                                                                          "Type" => pure TLTypeType
+                                                                          "Type" => do assertVarContext Optional
+                                                                                       pure TLTypeType
                                                                           _ => checkIdent cname
 
   checkTypeExpression (TLEIdent name@(MkTLNameNs ns _ type)) = checkIdent name
@@ -206,19 +213,22 @@ checkTypeExpressionAndNormalize : TLExpressionLang -> TEff TLSTypeExpr
 checkTypeExpressionAndNormalize expr = checkTypeExpression expr
 
 checkArg : TLEArg -> TTEff TLSArg
-checkArg (MkTLEArg name type) = do assertVarNotExist name type
+checkArg (MkTLEArg name type) = do VarContext :- put Required
+                                   assertVarNotExist name type
                                    expr <- checkTypeExpressionAndNormalize type
                                    ref <- generateRef
                                    insertVar $ (MkTLSArg (show name) ref expr)
 
-checkArg (MkTLEOptArg name type) = do assertVarNotExist name type
+checkArg (MkTLEOptArg name type) = do VarContext :- put Optional
+                                      assertVarNotExist name type
                                       expr <- checkTypeExpressionAndNormalize type
                                       if ((checkTypeEquivalence expr TLNatType) || (checkTypeEquivalence expr TLTypeType))
                                          then (do ref <- generateRef
                                                   insertVar $ (MkTLSArgOpt (show name) ref expr))
                                          else raise "Optional vars should of type # or Type"
 
-checkArg (MkTLEArgCond name cond type) = do assertVarNotExist name type
+checkArg (MkTLEArgCond name cond type) = do VarContext :- put Required
+                                            assertVarNotExist name type
                                             cd <- checkCond cond
                                             expr <- checkTypeExpressionAndNormalize type
                                             ref <- generateRef
@@ -238,6 +248,7 @@ checkCombinator comb = do section <- Section :- get
                           cargs <- mapE (\arg => checkArg arg) (args comb)
                           cref <- genCref
                           let magic = ensureMagic comb
+                          VarContext :- put Result
                           (case section of
                                 Types => do typeRef <- checkResultType (resultType comb)
                                             insertConstructor $ MkTLSConstructor (show $ getName (identifier comb)) magic cargs cref typeRef
@@ -268,6 +279,7 @@ runTypechecker program = runInit [
     Store := emptyStore,
     Args := [],
     Section := Types,
+    VarContext := Required,
     default,
     VarRefs := 0,
     CRefs := 0

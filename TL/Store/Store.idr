@@ -22,17 +22,32 @@ Show TLStore where
                                                   ++ "--- functions ---\n"
                                                   ++ (show functions) ++ "\n"
 
+data VarCtx = Required | Optional | Result
+
+Eq VarCtx where
+  (==) Required Required = True
+  (==) Optional Optional = True
+  (==) Result Result = True
+  (==) _ _ = False
+
+Show VarCtx where
+  show Required = "required"
+  show Optional = "optional"
+  show Result = "result"
+
 data Args : Type where
 data Store : Type where
 data Section : Type where
 data VarRefs : Type where
 data CRefs : Type where
+data VarContext : Type where
 
 TEff : Type -> Type
 TEff ret = Effects.SimpleEff.Eff ret [
   Store ::: STATE TLStore,
   Args ::: STATE (List TLSArg),
   Section ::: STATE TLSection,
+  VarContext ::: STATE VarCtx,
   EXCEPTION String
 ]
 
@@ -41,6 +56,7 @@ TTEff ret = Effects.SimpleEff.Eff ret [
   Store ::: STATE TLStore,
   Args ::: STATE (List TLSArg),
   Section ::: STATE TLSection,
+  VarContext ::: STATE VarCtx,
   EXCEPTION String,
   VarRefs ::: STATE VarRef,
   CRefs ::: STATE VarRef

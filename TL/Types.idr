@@ -23,7 +23,7 @@ Show TLName where
   show (MkTLName name type) = name
   show (MkTLNameNs ns name type) = ns ++ "." ++ name
 
-data TLBuiltIn = TLInt | TLNat | TLLong | TLString | TLDouble | TLTType
+data TLBuiltIn = TLInt | TLNat | TLLong | TLString | TLDouble | TLTType | TLInt128 | TLInt256
 
 Show TLBuiltIn where
   show TLInt = "Int"
@@ -32,6 +32,8 @@ Show TLBuiltIn where
   show TLString = "String"
   show TLDouble = "Double"
   show TLTType = "Type"
+  show TLInt128 = "Int128"
+  show TLInt256 = "Int256"
 
 data TLTypeParam = TLParamNat | TLParamType
 
@@ -63,6 +65,8 @@ Eq TLBuiltIn where
   (==) TLString TLString = True
   (==) TLDouble TLDouble = True
   (==) TLTType TLTType = True
+  (==) TLInt128 TLInt128 = True
+  (==) TLInt256 TLInt256 = True
   (==) _ _ = False
 
 ConstructorRef : Type
@@ -172,7 +176,7 @@ record TLSConstructor where
 
 showMagic : Integer -> String
 showMagic x with (intToBits {n = 32} x)
-  showMagic x | (MkBits y) = b32ToString y
+  showMagic x | (MkBits y) = b32ToHexString y
 
 Show TLSConstructor where
   show (MkTLSConstructor identifier magic args cref resultType) = identifier
@@ -234,3 +238,15 @@ TLDoubleTypeBare = MkTLSTypeBare TLDoubleType
 
 TLTypeType : TLSTypeExpr
 TLTypeType = MkTLSTypeExpr (Left TLTType) []
+
+TLTypeInt128 : TLSTypeExpr
+TLTypeInt128 = MkTLSTypeExpr (Left TLInt128) []
+
+TLTypeInt128Bare : TLSTypeExpr
+TLTypeInt128Bare = MkTLSTypeBare TLTypeInt128
+
+TLTypeInt256 : TLSTypeExpr
+TLTypeInt256 = MkTLSTypeExpr (Left TLInt256) []
+
+TLTypeInt256Bare : TLSTypeExpr
+TLTypeInt256Bare = MkTLSTypeBare TLTypeInt256
