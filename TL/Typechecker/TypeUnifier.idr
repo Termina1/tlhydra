@@ -45,17 +45,20 @@ assertTypeParams x xs = let type = storeGetType x !(Store :- get) in
                            then pure ()
                            else raise $ "TypeError: cant unify types and expression, type: " ++ (show type) ++ ", params: " ++ (show xs)
 
-convertCombinatorNameToType : TLName -> TEff TypeRef
+convertCombinatorNameToType : TLName -> TEff (Maybe TypeRef)
 convertCombinatorNameToType x = case storeNameToConstructor x !(Store :- get) of
-                                     Nothing => raise $ "Undefined combnator name: " ++ (show x) ++ "\n constructors: " ++ (show $ constructors !(Store :- get))
-                                     (Just (MkTLSConstructor identifier magic args cref (Right (ref, _)))) => pure $ Right (ref, cref)
-                                     (Just (MkTLSConstructor identifier magic args cref ref)) => pure ref
+                                     Nothing => pure Nothing
+                                     -- this case saves a link to constructor, for bare type
+                                     (Just (MkTLSConstructor identifier magic args cref (Right (ref, _)))) => pure $ Just $ Right (ref, cref)
+                                     (Just (MkTLSConstructor identifier magic args cref ref)) => pure $ Just ref
 
 mutual
   convertHelper : Bool -> TLName -> List TLSExpr -> TEff TLSTypeExpr
-  convertHelper holes name params = do ref <- convertCombinatorNameToType name
-                                       type <- checkTypeHelper (Just ref) holes name params
-                                       pure $ MkTLSTypeBare type
+  convertHelper holes name params = case !(convertCombinatorNameToType name) of
+                                          Nothing => if holes then pure $ MkTLSTypeHole name params
+                                                              else raise $ "Undefined combnator name: " ++ (show name)
+                                          Just ref => do type <- checkTypeHelper (Just ref) holes name params
+                                                         pure $ MkTLSTypeBare type
   checkType : TLName -> List TLSExpr -> Bool -> TEff TLSTypeExpr
   checkType cname@(MkTLNameNs ns name TLNameTypeLC) params holes = convertHelper holes cname params
   checkType cname@(MkTLName name TLNameTypeLC) params holes = convertHelper holes cname params
