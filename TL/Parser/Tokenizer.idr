@@ -16,12 +16,6 @@ optional r = r <|> empty
 ucLetter : Lexer
 ucLetter = pred (\ch => (isAlpha ch) && (isUpper ch))
 
-digit : Lexer
-digit = pred isDigit
-
-hexDigit : Lexer
-hexDigit = pred isHexDigit
-
 underscore : Lexer
 underscore = is '_'
 

@@ -180,9 +180,6 @@ natConst = terminald (\token => (case token of
                                      (TLTokenNat k) =>Just k
                                      _ => Nothing))
 
-optional : Grammar tok True ty -> Grammar tok False (Maybe ty)
-optional p = (p >>= \t => pure $ Just t) <|> pure Nothing
-
 conditional : Rule TLECond
 conditional = terminald (\token => (case token of
                                          (TLTokenCond x k) => Just (x, k)

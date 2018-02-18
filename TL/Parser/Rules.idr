@@ -1,7 +1,7 @@
 module TL.Parser.Rules
 
 import Text.Parser
-import Text.Lexer
+import Text.Lexer.Core
 
 import TL.Parser.Tokenizer
 import TL.Parser.Support
@@ -72,7 +72,7 @@ parseResultTypeHelper name = do expect $ TLTokenChar '<'
 parseResultType : Rule TLExpressionLang
 parseResultType = do name <- boxedTypeName
                      (parseResultTypeHelper name) <|>
-                       (many parseExpression) >>= (\expr => pure $ TLEExpression ((TLEIdent name) :: expr))
+                       ((many parseExpression) >>= (\expr => pure $ TLEExpression ((TLEIdent name) :: expr)))
 
 
 parseTypTermWithBang : Rule TLExpressionLang
@@ -196,7 +196,7 @@ parseProgram = do decls <- some parseTLDeclaration
 
 export
 parseTL : String -> Either (ParseError (TokenData TLToken)) TLProgram
-parseTL x = case parse (tlLex x) parseProgram of
+parseTL x = case parse parseProgram (tlLex x) of
                  (Left error) => Left error
                  (Right (program, left)) => if (length left) == 0
                                                then Right program
