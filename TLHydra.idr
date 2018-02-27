@@ -8,7 +8,14 @@ import Text.Lexer
 import TL.Parser.Support
 import TL.Parser.Rules
 import TL.Parser.Tokenizer
+import TL.Types
 import crc32
+import TL.Serialize.Serializer
+import TL.Serialize.Serializable
+import Data.Buffer
+import Control.ST
+import ST.Buffer
+import Data.Vect
 
 evaluateProgram : String -> Either String TLStore
 evaluateProgram str with (parseTL str)

@@ -12,6 +12,7 @@ import TL.Store.Store
 import TL.Typechecker.TypeUnifier
 import TL.TypeChecker.TypeholeFiller
 import TL.Magic
+import Data.Fin
 
 nameToVar : List TLSArg -> String -> Maybe TLSArg
 nameToVar [] x = Nothing
@@ -62,15 +63,15 @@ compareTypeParams ref params s = let type = storeGetType ref !(Store :- get) in
                                     then pure ()
                                     else raise $ "Wrong parameters for type: " ++ (show ref) ++ " and params " ++ (show s)
 
-checkTypeParamType : TLSTypeExpr -> TEff TLTypeParam
-checkTypeParamType (MkTLSTypeExpr (Left TLTType) []) = pure TLParamType
-checkTypeParamType (MkTLSTypeExpr (Left TLNat) []) = pure TLParamNat
-checkTypeParamType x = raise $ "Not permitted type to depend: " ++ (show x)
+checkTypeParamType : String -> TLSTypeExpr -> TEff TLTypeParam
+checkTypeParamType name (MkTLSTypeExpr (Left TLTType) []) = pure $ TLParamType name
+checkTypeParamType name (MkTLSTypeExpr (Left TLNat) []) = pure $ TLParamNat name
+checkTypeParamType name x = raise $ "Not permitted type to depend: " ++ (show x)
 
 checkTypeParam : TLExpressionLang -> TEff (List TLTypeParam)
 checkTypeParam param@(TLEIdent (MkTLName name type)) = case nameToVar !(Args :- get) name of
                                                             Nothing => raise $ "Var not existed: " ++ (show param)
-                                                            (Just arg) => do cparam <- checkTypeParamType $ argType arg
+                                                            (Just arg) => do cparam <- checkTypeParamType name $ argType arg
                                                                              pure [cparam]
 checkTypeParam (TLEExpression params) = do ls <- mapE (\expr => checkTypeParam expr) params
                                            pure (join ls)
@@ -100,7 +101,9 @@ assertVarNotExist name type = case nameToVar !(Args :- get) (show name) of
 checkCond : TLECond -> TEff Conditional
 checkCond (name, bit) = case nameToVar !(Args :- get) name of
                              Nothing => raise "Can't depend on undeclared var"
-                             (Just arg) => pure $ ((varToRef arg), (cast bit))
+                             (Just arg) => case (natToFin bit 32) of
+                               Nothing => raise "You cant't use more than 32 bits for conditional"
+                               Just fin => pure $ ((varToRef arg), fin)
 
 assertCombinatorName : TLCName -> TLSection -> TEff ()
 assertCombinatorName x section with (section)

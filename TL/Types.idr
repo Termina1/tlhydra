@@ -1,10 +1,13 @@
 module TL.Types
 
 import Data.Bits
+import Data.Fin
 
 %access public export
 
 data TLNameType = TLNameTypeLC | TLNameTypeUC
+VarRef : Type
+VarRef = Int
 
 Eq TLNameType where
   (==) TLNameTypeLC TLNameTypeLC = True
@@ -14,6 +17,9 @@ Eq TLNameType where
 data TLName : Type where
   MkTLName : (name : String) -> (type : TLNameType) -> TLName
   MkTLNameNs : (ns : String) -> (name : String) -> (type : TLNameType) -> TLName
+
+constructorName : String -> TLName
+constructorName name = MkTLName name TLNameTypeLC
 
 nameType : TLName -> TLNameType
 nameType (MkTLName name type) = type
@@ -35,15 +41,19 @@ Show TLBuiltIn where
   show TLInt128 = "Int128"
   show TLInt256 = "Int256"
 
-data TLTypeParam = TLParamNat | TLParamType
+data TLTypeParam = TLParamNat String | TLParamType String
+
+getTypeParamName : TLTypeParam -> String
+getTypeParamName (TLParamNat name) = name
+getTypeParamName (TLParamType name) = name
 
 Show TLTypeParam where
-  show TLParamNat = "#"
-  show TLParamType = "Type"
+  show (TLParamNat str) = "#"
+  show (TLParamType str) = "Type"
 
 Eq TLTypeParam where
-  (==) TLParamNat TLParamNat = True
-  (==) TLParamType TLParamType = True
+  (==) (TLParamNat _) (TLParamNat _) = True
+  (==) (TLParamType _) (TLParamType _) = True
   (==) _ _ = False
 
 data TLType : Type where
@@ -75,11 +85,11 @@ ConstructorRef = Maybe Int
 TypeRef : Type
 TypeRef = Either TLBuiltIn (Int, ConstructorRef)
 
-VarRef : Type
-VarRef = Int
-
 Conditional : Type
-Conditional = (VarRef, Int)
+Conditional = (VarRef, Fin 32)
+
+Show (Fin n) where
+  show x = show (finToNat x)
 
 data TLSection = Types | Functions
 
@@ -114,16 +124,16 @@ mutual
     show (MkTLSNatVar ref) = "Var #" ++ (show ref)
 
   Show TLSExpr where
-    show (MkTLSExprType type) = show type
-    show (MKTLSExprNat natExpr) = show natExpr
+    show (MkTLSExprType type) = assert_total $ show type
+    show (MKTLSExprNat natExpr) = assert_total $ show natExpr
 
   Show TLSTypeExpr where
-    show (MkTLSTypeExpr type children) = "Type Ref (" ++ (show type) ++ ") " ++ (show children)
-    show (MkTLSTypeArray mult args) = (show mult) ++ "*" ++ (show args)
+    show (MkTLSTypeExpr type children) = assert_total $ "Type Ref (" ++ (show type) ++ ") " ++ (show children)
+    show (MkTLSTypeArray mult args) = assert_total $ (show mult) ++ "*" ++ (show args)
     show (MkTLSTypeVar ref) = "TypeVar #" ++ (show ref)
-    show (MkTLSTypeBare expr) = "%" ++ (show expr)
-    show (MkTLSTypeBang expr) = "!" ++ (show expr)
-    show (MkTLSTypeHole name exprs) = "?hole " ++ (show name) ++ " " ++ (show exprs)
+    show (MkTLSTypeBare expr) = assert_total $ "%" ++ (show expr)
+    show (MkTLSTypeBang expr) = assert_total $ "!" ++ (show expr)
+    show (MkTLSTypeHole name exprs) = assert_total $ "?hole " ++ (show name) ++ " " ++ (show exprs)
 
   Eq TLSNat where
     (==) (MkTLSNat nat) (MkTLSNat nat1) = nat == nat1
@@ -169,13 +179,13 @@ Show TLSArg where
 record TLSConstructor where
   constructor MkTLSConstructor
   identifier : String
-  magic : Integer
+  magic : Int
   args : List TLSArg
   ref : ConstructorRef
   resultType : TypeRef
 
-showMagic : Integer -> String
-showMagic x with (intToBits {n = 32} x)
+showMagic : Int -> String
+showMagic x with (intToBits {n = 32} (cast x))
   showMagic x | (MkBits y) = b32ToHexString y
 
 Show TLSConstructor where
@@ -185,7 +195,7 @@ Show TLSConstructor where
 record TLSFunction where
   constructor MkTLSFunction
   identifier : String
-  magic : Integer
+  magic : Int
   args : List TLSArg
   resultType : TLSTypeExpr
 
